@@ -294,28 +294,19 @@ class SoundchartsConnector:
         platform: 'spotify', 'youtube', 'tiktok', 'instagram', etc.
         start_date/end_date: 'YYYY-MM-DD' strings.
         """
-        all_items: list[dict] = []
-        offset = 0
-        while True:
-            data = await self._get(
-                f"/api/v2/artist/{sc_uuid}/audience/{platform}",
-                params={
-                    "startDate": start_date,
-                    "endDate": end_date,
-                    "offset": offset,
-                    "limit": 100,
-                },
-            )
-            if not data:
-                break
-            items = data.get("items", [])
-            if not items:
-                break
-            all_items.extend(items)
-            if len(items) < 100:
-                break
-            offset += 100
-        return all_items
+        # Single page — 30 day range = max 31 data points, well under 100 limit
+        data = await self._get(
+            f"/api/v2/artist/{sc_uuid}/audience/{platform}",
+            params={
+                "startDate": start_date,
+                "endDate": end_date,
+                "offset": 0,
+                "limit": 100,
+            },
+        )
+        if not data:
+            return []
+        return data.get("items", [])
 
     async def get_streaming_stats(
         self,
@@ -328,28 +319,19 @@ class SoundchartsConnector:
 
         platform: 'spotify' (monthly_listeners), 'youtube' (views), etc.
         """
-        all_items: list[dict] = []
-        offset = 0
-        while True:
-            data = await self._get(
-                f"/api/v2/artist/{sc_uuid}/streaming/{platform}/listening",
-                params={
-                    "startDate": start_date,
-                    "endDate": end_date,
-                    "offset": offset,
-                    "limit": 100,
-                },
-            )
-            if not data:
-                break
-            items = data.get("items", [])
-            if not items:
-                break
-            all_items.extend(items)
-            if len(items) < 100:
-                break
-            offset += 100
-        return all_items
+        # Single page — 30 day range = max 31 data points, well under 100 limit
+        data = await self._get(
+            f"/api/v2/artist/{sc_uuid}/streaming/{platform}/listening",
+            params={
+                "startDate": start_date,
+                "endDate": end_date,
+                "offset": 0,
+                "limit": 100,
+            },
+        )
+        if not data:
+            return []
+        return data.get("items", [])
 
     async def get_current_stats(self, sc_uuid: str) -> Optional[dict]:
         """Get current stats across all platforms in a single call."""
