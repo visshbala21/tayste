@@ -8,10 +8,10 @@ export default async function ScoutFeedPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
   searchParams?: { limit?: string };
 }) {
-  const { id } = await params;
+  const { id } = params;
   const limit = Math.max(1, Math.min(parseInt(searchParams?.limit || "50", 10) || 50, 200));
   const [feed, label] = await Promise.all([
     api.getScoutFeed(id, limit),

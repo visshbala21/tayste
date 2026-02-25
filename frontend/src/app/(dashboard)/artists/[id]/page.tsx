@@ -10,11 +10,11 @@ export default async function ArtistDetailPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ label?: string }>;
+  params: { id: string };
+  searchParams?: { label?: string };
 }) {
-  const { id } = await params;
-  const { label: labelId } = await searchParams;
+  const { id } = params;
+  const labelId = searchParams?.label;
   const artist = await api.getArtist(id);
 
   return (

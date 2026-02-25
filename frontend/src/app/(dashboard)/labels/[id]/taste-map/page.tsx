@@ -3,8 +3,8 @@ import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export default async function TasteMapPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function TasteMapPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [tasteMap, label] = await Promise.all([
     api.getTasteMap(id),
     api.getLabel(id),
