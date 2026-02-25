@@ -18,6 +18,8 @@ target_metadata = Base.metadata
 
 db_url = os.environ.get("DATABASE_URL_SYNC")
 if db_url:
+    if db_url.startswith("postgres://"):
+        db_url = "postgresql://" + db_url[len("postgres://"):]
     config.set_main_option("sqlalchemy.url", db_url)
 
 

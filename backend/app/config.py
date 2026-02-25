@@ -2,6 +2,28 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
+def _normalize_async_db_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://"):
+        return url
+    if url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
+
+def _normalize_sync_db_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + url[len("postgresql+asyncpg://"):]
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
+
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://tayste:tayste_dev@db:5432/tayste"
     database_url_sync: str = "postgresql://tayste:tayste_dev@db:5432/tayste"
@@ -35,4 +57,10 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    settings.database_url = _normalize_async_db_url(settings.database_url)
+    if settings.database_url_sync:
+        settings.database_url_sync = _normalize_sync_db_url(settings.database_url_sync)
+    else:
+        settings.database_url_sync = _normalize_sync_db_url(settings.database_url)
+    return settings
