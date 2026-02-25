@@ -53,7 +53,7 @@ async def _resolve_missing_platform_ids(
     warnings: list[str] = []
     yt = YouTubeConnector()
     search_disabled = False
-    search_budget = 25
+    search_budget = 10
     searches_used = 0
     search_cache: dict[str, dict] = {}
 

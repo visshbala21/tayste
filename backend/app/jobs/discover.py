@@ -64,14 +64,14 @@ async def discover_for_label(db, label_id: str):
         queries = [f"{label.name} emerging artists", f"{label.name} new music"]
     else:
         expanded = expand_queries(label_dna, label.name)
-        queries = expanded.youtube_queries[:10]
+        queries = expanded.youtube_queries[:5]
 
     yt = YouTubeConnector()
     spotify = SpotifyConnector()
     soundcloud = SoundCloudConnector()
     discovered = 0
     yt_disabled = False
-    yt_budget = 20
+    yt_budget = 5
     yt_used = 0
     spotify_budget = 25
     spotify_used = 0
@@ -84,10 +84,10 @@ async def discover_for_label(db, label_id: str):
             break
         if yt.available and not yt_disabled and yt_used < yt_budget:
             try:
-                channels = await yt.search_channels(query, max_results=5)
+                channels = await yt.search_channels(query, max_results=3)
             except Exception as e:
                 msg = str(e)
-                if "403" in msg or "Forbidden" in msg:
+                if "400" in msg or "403" in msg or "Forbidden" in msg or "429" in msg:
                     yt_disabled = True
                     channels = []
                 else:

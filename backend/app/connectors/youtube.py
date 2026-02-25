@@ -25,6 +25,11 @@ class YouTubeConnector:
                 "part": "snippet", "maxResults": max_results,
                 "order": "viewCount",
             })
+            if resp.status_code in (400, 403, 429):
+                raise httpx.HTTPStatusError(
+                    f"YouTube quota/auth error: {resp.status_code}",
+                    request=resp.request, response=resp,
+                )
             resp.raise_for_status()
             data = resp.json()
             results = []
@@ -61,18 +66,28 @@ class YouTubeConnector:
             }
 
     async def get_recent_videos(self, channel_id: str, max_results: int = 5) -> list[dict]:
-        """Get recent video stats for a channel."""
+        """Get recent video stats for a channel.
+        Uses playlistItems.list (1 quota unit) instead of search.list (100 units).
+        The uploads playlist ID is derived from the channel ID: UC... -> UU...
+        """
         if not self.available:
             return self._mock_recent_videos(channel_id)
         async with httpx.AsyncClient() as client:
-            # First get video IDs
-            search_resp = await client.get(f"{YOUTUBE_API_BASE}/search", params={
-                "key": self.api_key, "channelId": channel_id,
-                "type": "video", "part": "id", "maxResults": max_results,
-                "order": "date",
+            # Derive uploads playlist ID from channel ID (UC -> UU)
+            uploads_playlist_id = "UU" + channel_id[2:] if channel_id.startswith("UC") else None
+            if not uploads_playlist_id:
+                return []
+            # Use playlistItems.list (1 unit) instead of search.list (100 units)
+            search_resp = await client.get(f"{YOUTUBE_API_BASE}/playlistItems", params={
+                "key": self.api_key, "playlistId": uploads_playlist_id,
+                "part": "contentDetails", "maxResults": max_results,
             })
             search_resp.raise_for_status()
-            video_ids = [item["id"]["videoId"] for item in search_resp.json().get("items", [])]
+            video_ids = [
+                item["contentDetails"]["videoId"]
+                for item in search_resp.json().get("items", [])
+                if "contentDetails" in item and "videoId" in item["contentDetails"]
+            ]
             if not video_ids:
                 return []
             # Then get stats
