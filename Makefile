@@ -1,4 +1,4 @@
-.PHONY: dev stop jobs-ingest jobs-score jobs-discover jobs-llm demo seed clean
+.PHONY: dev stop jobs-ingest jobs-score jobs-discover jobs-llm jobs-sc-discover jobs-sc-enrich jobs-spotify-graph demo seed clean
 
 # Start all services
 dev:
@@ -16,7 +16,7 @@ stop:
 jobs-ingest:
 	docker compose run --rm jobs app.jobs.ingest
 
-# Run discovery job (find new candidates)
+# Run legacy discovery job (find new candidates via YouTube/Spotify search)
 jobs-discover:
 	docker compose run --rm jobs app.jobs.discover
 
@@ -28,6 +28,18 @@ jobs-score:
 jobs-llm:
 	docker compose run --rm jobs app.jobs.llm_enrich
 
+# Run Spotify related-artists graph expansion (primary discovery)
+jobs-spotify-graph:
+	docker compose run --rm jobs app.jobs.pull_spotify_graph
+
+# Run Soundcharts candidate discovery + cross-referencing
+jobs-sc-discover:
+	docker compose run --rm jobs app.jobs.pull_soundcharts_candidates
+
+# Run Soundcharts enrichment (time-series stats)
+jobs-sc-enrich:
+	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
+
 # Full demo pipeline
 demo:
 	@echo "=== Tayste Demo Pipeline ==="
@@ -37,13 +49,17 @@ demo:
 	@sleep 10
 	@echo "Step 2: Seeding demo data..."
 	docker compose run --rm jobs app.jobs.seed_demo
-	@echo "Step 3: Running ingestion..."
+	@echo "Step 3: Spotify graph expansion..."
+	docker compose run --rm jobs app.jobs.pull_spotify_graph
+	@echo "Step 4: Soundcharts discovery + cross-referencing..."
+	docker compose run --rm jobs app.jobs.pull_soundcharts_candidates
+	@echo "Step 5: Soundcharts enrichment..."
+	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
+	@echo "Step 6: Running supplemental ingestion..."
 	docker compose run --rm jobs app.jobs.ingest
-	@echo "Step 4: Running discovery..."
-	docker compose run --rm jobs app.jobs.discover
-	@echo "Step 5: Running scoring..."
+	@echo "Step 7: Running scoring..."
 	docker compose run --rm jobs app.jobs.score
-	@echo "Step 6: Running LLM enrichment..."
+	@echo "Step 8: Running LLM enrichment..."
 	docker compose run --rm jobs app.jobs.llm_enrich
 	@echo "=== Demo Ready ==="
 	@echo "  Frontend: http://localhost:3000"

@@ -31,6 +31,9 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       SPOTIFY_MARKET: ${SPOTIFY_MARKET:-US}
+      SOUNDCHARTS_APP_ID: ${SOUNDCHARTS_APP_ID:-}
+      SOUNDCHARTS_API_KEY: ${SOUNDCHARTS_API_KEY:-}
+      SOUNDCHARTS_API_BASE: ${SOUNDCHARTS_API_BASE:-https://customer.api.soundcharts.com}
     depends_on:
       db:
         condition: service_healthy
@@ -69,6 +72,9 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       SPOTIFY_MARKET: ${SPOTIFY_MARKET:-US}
+      SOUNDCHARTS_APP_ID: ${SOUNDCHARTS_APP_ID:-}
+      SOUNDCHARTS_API_KEY: ${SOUNDCHARTS_API_KEY:-}
+      SOUNDCHARTS_API_BASE: ${SOUNDCHARTS_API_BASE:-https://customer.api.soundcharts.com}
     depends_on:
       db:
         condition: service_healthy

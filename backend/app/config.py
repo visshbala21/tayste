@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
     spotify_market: str = "US"
+    soundcharts_app_id: str = ""
+    soundcharts_api_key: str = ""
+    soundcharts_api_base: str = "https://customer.api.soundcharts.com"
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
 

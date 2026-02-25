@@ -91,12 +91,27 @@ async def run():
             db.add(artist)
             await db.flush()
 
-            account = PlatformAccount(
+            yt_account = PlatformAccount(
                 id=new_uuid(), artist_id=artist.id, platform="youtube",
                 platform_id=f"UC{new_uuid()[:20]}",
                 platform_url=f"https://youtube.com/@{ra['name'].replace(' ', '')}",
             )
-            db.add(account)
+            db.add(yt_account)
+
+            sp_account = PlatformAccount(
+                id=new_uuid(), artist_id=artist.id, platform="spotify",
+                platform_id=new_uuid()[:22],
+                platform_url=f"https://open.spotify.com/artist/{new_uuid()[:22]}",
+            )
+            db.add(sp_account)
+
+            sc_uuid = new_uuid()
+            sc_account = PlatformAccount(
+                id=new_uuid(), artist_id=artist.id, platform="soundcharts",
+                platform_id=sc_uuid,
+                platform_url=f"https://app.soundcharts.com/app/artist/{sc_uuid}",
+            )
+            db.add(sc_account)
 
             membership = RosterMembership(
                 id=new_uuid(), label_id=label.id, artist_id=artist.id,
@@ -131,12 +146,27 @@ async def run():
             db.add(artist)
             await db.flush()
 
-            account = PlatformAccount(
+            yt_account = PlatformAccount(
                 id=new_uuid(), artist_id=artist.id, platform="youtube",
                 platform_id=f"UC{new_uuid()[:20]}",
                 platform_url=f"https://youtube.com/@{ca['name'].replace(' ', '')}",
             )
-            db.add(account)
+            db.add(yt_account)
+
+            sp_account = PlatformAccount(
+                id=new_uuid(), artist_id=artist.id, platform="spotify",
+                platform_id=new_uuid()[:22],
+                platform_url=f"https://open.spotify.com/artist/{new_uuid()[:22]}",
+            )
+            db.add(sp_account)
+
+            sc_uuid = new_uuid()
+            sc_account = PlatformAccount(
+                id=new_uuid(), artist_id=artist.id, platform="soundcharts",
+                platform_id=sc_uuid,
+                platform_url=f"https://app.soundcharts.com/app/artist/{sc_uuid}",
+            )
+            db.add(sc_account)
 
             # Generate snapshots with specified growth
             snaps = generate_snapshots(artist.id, ca["followers"], ca["views"], ca["growth"])

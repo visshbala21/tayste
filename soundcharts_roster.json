@@ -1,0 +1,188 @@
+{
+    "artists": [
+      {
+        "name": "Snoop Dogg",
+        "platform": "spotify",
+        "platform_id": "7hJcb9fa4alzcOq3EaNPoG",
+        "platform_url": "https://open.spotify.com/artist/7hJcb9fa4alzcOq3EaNPoG",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      },
+      {
+        "name": "Dr. Dre",
+        "platform": "spotify",
+        "platform_id": "6DPYiyq5kWVQS4RGwxzPC7",
+        "platform_url": "https://open.spotify.com/artist/6DPYiyq5kWVQS4RGwxzPC7",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      },
+      {
+        "name": "2Pac",
+        "platform": "spotify",
+        "platform_id": "1ZwdS5xdxEREPySFridCfh",
+        "platform_url": "https://open.spotify.com/artist/1ZwdS5xdxEREPySFridCfh",
+        "genre_tags": ["hip-hop", "gangsta-rap", "west-coast-rap"]
+      },
+      {
+        "name": "Tha Dogg Pound",
+        "platform": "spotify",
+        "platform_id": "6n7nd5iceYpXVwcx8VPpxF",
+        "platform_url": "https://open.spotify.com/artist/6n7nd5iceYpXVwcx8VPpxF",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      },
+      {
+        "name": "Nate Dogg",
+        "platform": "spotify",
+        "platform_id": "3qcsvmR8Cz0u6YwWxVZJ1C",
+        "platform_url": "https://open.spotify.com/artist/3qcsvmR8Cz0u6YwWxVZJ1C",
+        "genre_tags": ["g-funk", "rnb", "west-coast-rap"]
+      },
+      {
+        "name": "The Lady of Rage",
+        "platform": "spotify",
+        "platform_id": "1kQhtobYuqpmvVnz0lV1av",
+        "platform_url": "https://open.spotify.com/artist/1kQhtobYuqpmvVnz0lV1av",
+        "genre_tags": ["hip-hop", "gangsta-rap", "west-coast-rap"]
+      },
+      {
+        "name": "RBX",
+        "platform": "spotify",
+        "platform_id": "6V8ZXVuOBiIyHEtGbKmxby",
+        "platform_url": "https://open.spotify.com/artist/6V8ZXVuOBiIyHEtGbKmxby",
+        "genre_tags": ["hip-hop", "west-coast-rap"]
+      },
+      {
+        "name": "Jewell",
+        "platform": "spotify",
+        "platform_id": "6M1iW76n49gxUEDJttJkPs",
+        "platform_url": "https://open.spotify.com/artist/6M1iW76n49gxUEDJttJkPs",
+        "genre_tags": ["rnb", "g-funk"]
+      },
+      {
+        "name": "Danny Boy",
+        "platform": "spotify",
+        "platform_id": "3QVjp3BKAFBlV3iVJNlQkF",
+        "platform_url": "https://open.spotify.com/artist/3QVjp3BKAFBlV3iVJNlQkF",
+        "genre_tags": ["rnb", "soul"]
+      },
+      {
+        "name": "Michel'le",
+        "platform": "spotify",
+        "platform_id": "4l60MSYhNneW3PBji9JdRU",
+        "platform_url": "https://open.spotify.com/artist/4l60MSYhNneW3PBji9JdRU",
+        "genre_tags": ["rnb", "new-jack-swing"]
+      },
+      {
+        "name": "The D.O.C.",
+        "platform": "spotify",
+        "platform_id": "7CY5DUMQg0eYcOdXugNR1S",
+        "platform_url": "https://open.spotify.com/artist/7CY5DUMQg0eYcOdXugNR1S",
+        "genre_tags": ["hip-hop", "gangsta-rap"]
+      },
+      {
+        "name": "Above The Law",
+        "platform": "spotify",
+        "platform_id": "33scadgurbTkIz8xTWe7VV",
+        "platform_url": "https://open.spotify.com/artist/33scadgurbTkIz8xTWe7VV",
+        "genre_tags": ["hip-hop", "g-funk", "west-coast-rap"]
+      },
+      {
+        "name": "Bad Azz",
+        "platform": "spotify",
+        "platform_id": "6CFPdR2SGFZ1Vd3IvkFo1z",
+        "platform_url": "https://open.spotify.com/artist/6CFPdR2SGFZ1Vd3IvkFo1z",
+        "genre_tags": ["hip-hop", "west-coast-rap"]
+      },
+      {
+        "name": "CPO Boss Hogg",
+        "platform": "spotify",
+        "platform_id": "4jaF4SUXwxLBzME2YkdEwU",
+        "platform_url": "https://open.spotify.com/artist/4jaF4SUXwxLBzME2YkdEwU",
+        "genre_tags": ["hip-hop", "gangsta-rap"]
+      },
+      {
+        "name": "Crooked I",
+        "platform": "spotify",
+        "platform_id": "3rxeQlsv0Sc2nyYaZ5W71T",
+        "platform_url": "https://open.spotify.com/artist/3rxeQlsv0Sc2nyYaZ5W71T",
+        "genre_tags": ["hip-hop", "gangsta-rap"]
+      },
+      {
+        "name": "LBC Crew",
+        "platform": "spotify",
+        "platform_id": "3v17IZGVkAtU5J3atvYl0u",
+        "platform_url": "https://open.spotify.com/artist/3v17IZGVkAtU5J3atvYl0u",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      },
+      {
+        "name": "Outlawz",
+        "platform": "spotify",
+        "platform_id": "0y0H3022bYcjQhCqkqNcda",
+        "platform_url": "https://open.spotify.com/artist/0y0H3022bYcjQhCqkqNcda",
+        "genre_tags": ["hip-hop", "gangsta-rap"]
+      },
+      {
+        "name": "O.F.T.B.",
+        "platform": "spotify",
+        "platform_id": "5DvUWmi4JVPhtb4mYKSHzn",
+        "platform_url": "https://open.spotify.com/artist/5DvUWmi4JVPhtb4mYKSHzn",
+        "genre_tags": ["hip-hop", "west-coast-rap"]
+      },
+      {
+        "name": "Sam Sneed",
+        "platform": "spotify",
+        "platform_id": "3z7rFMvx6bMpiKFFitvolG",
+        "platform_url": "https://open.spotify.com/artist/3z7rFMvx6bMpiKFFitvolG",
+        "genre_tags": ["hip-hop", "g-funk"]
+      },
+      {
+        "name": "Soopafly",
+        "platform": "spotify",
+        "platform_id": "3psH5t9zrYybMhL4awf9Yg",
+        "platform_url": "https://open.spotify.com/artist/3psH5t9zrYybMhL4awf9Yg",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      },
+      {
+        "name": "Tray Deee",
+        "platform": "spotify",
+        "platform_id": "0rWOKhdcjIKKsCM8DHJTlT",
+        "platform_url": "https://open.spotify.com/artist/0rWOKhdcjIKKsCM8DHJTlT",
+        "genre_tags": ["hip-hop", "west-coast-rap", "gangsta-rap"]
+      },
+      {
+        "name": "Young Soldierz",
+        "platform": "spotify",
+        "platform_id": "4uFQyVGbNcqfSvXYdGv49X",
+        "platform_url": "https://open.spotify.com/artist/4uFQyVGbNcqfSvXYdGv49X",
+        "genre_tags": ["hip-hop", "west-coast-rap"]
+      },
+  
+      {
+        "name": "October London",
+        "platform": "spotify",
+        "platform_id": "1eNO1DUCOtZgCzlwtjtb1t",
+        "platform_url": "https://open.spotify.com/artist/1eNO1DUCOtZgCzlwtjtb1t",
+        "genre_tags": ["rnb", "soul", "retro-soul", "neo-soul"]
+      },
+      {
+        "name": "Merkules",
+        "platform": "spotify",
+        "platform_id": "4oYZcPoj3q3DneXomtQBzg",
+        "platform_url": "https://open.spotify.com/artist/4oYZcPoj3q3DneXomtQBzg",
+        "genre_tags": ["hip-hop", "underground-rap"]
+      },
+      {
+        "name": "D Smoke",
+        "platform": "spotify",
+        "platform_id": "4M2yJoLkAyX4PvE4D9gPvF",
+        "platform_url": "https://open.spotify.com/artist/4M2yJoLkAyX4PvE4D9gPvF",
+        "genre_tags": ["hip-hop", "conscious-rap"]
+      },
+      {
+        "name": "Tha Eastsidaz",
+        "platform": "spotify",
+        "platform_id": "4iZ4pt7kvcaH6Yo8UoZ4s2",
+        "platform_url": "https://open.spotify.com/artist/4iZ4pt7kvcaH6Yo8UoZ4s2",
+        "genre_tags": ["hip-hop", "west-coast-rap", "g-funk"]
+      }
+    ]
+  }
+  
