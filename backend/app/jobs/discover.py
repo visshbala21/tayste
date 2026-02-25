@@ -20,23 +20,50 @@ BAD_NAME_PATTERNS = [
     r"\b(music for|music to|music with)\b",
     r"\b(study|focus|deep focus|concentration)\b",
     r"\b(background music|ambient music|sleep music|meditation music)\b",
-    r"\b(relax|relaxing|calm|chill)\b",
+    r"\b(relax|relaxing|calm|chill vibes|chill beats)\b",
     r"\b(white noise|rain sounds|ocean sounds)\b",
     r"\b(work music|office music|productivity)\b",
     r"\b(instrumental music|lofi)\b",
+    r"\b(podcast|episode|interview|review|reaction)\b",
+    r"\b(best of|top \d|greatest hits|compilation)\b",
+    r"\b(lyrics|lyric video|official video|music video)\b",
+    r"\b(playlist|mix|mixtape|radio)\b",
+]
+
+# Genre names and descriptors that are NOT artist names
+GENRE_PATTERNS = [
+    # Broad genres
+    r"^(hip hop|hip-hop|rap|r&b|rnb|rock|pop|jazz|blues|soul|funk|country|metal|punk|reggae|ska|gospel|classical|electronic|edm|techno|house|trance|dubstep|dnb|drum and bass|ambient|folk|indie|alternative|grunge|emo)$",
+    # Sub-genres and compound genres
+    r"^(g[- ]?funk|trap|drill|boom bap|lo-?fi|synth-?pop|post-?punk|dream pop|shoegaze|new wave|dark-?wave|vapor-?wave|math rock|prog rock|death metal|black metal|nu metal|hard rock|soft rock|acid jazz|smooth jazz|neo[- ]?soul|trip[- ]?hop|uk garage|grime|afrobeats|dancehall|bossa nova|latin pop|k-?pop|j-?pop)$",
+    # Era/descriptor + genre combos
+    r"^\d{2}s\s+(hip hop|rap|rock|pop|r&b|soul|funk|jazz|metal|punk)",
+    r"^(new|old|classic|modern|underground|mainstream|alternative|experimental|progressive|traditional)\s+(hip hop|rap|rock|pop|r&b|soul|funk|jazz|metal|punk|music)",
+    # Genre with qualifiers
+    r"(hip hop|rap|rock|pop|r&b|rnb|soul|funk|jazz|blues|metal|punk|reggae).*(lyrics|songs|tracks|beats|instrumentals|remixes|samples|vibes|music|radio|mix)",
+    r"^(west coast|east coast|south|midwest|dirty south|southern)\s+(rap|hip hop|hip-hop)$",
+    # Slash/semicolon separated genres
+    r"^[a-zA-Z&\s]+[/;][a-zA-Z&\s]+$",
 ]
 
 
 def is_likely_slop(name: str) -> bool:
+    """Check if a name is likely not a real artist (genre, playlist, podcast, etc.)."""
     if not name:
         return True
-    lower = name.lower()
+    lower = name.strip().lower()
     if len(lower) > 60:
         return True
     if lower.count(",") >= 3:
         return True
+    # Single word names under 3 chars are suspicious
+    if len(lower) < 3 and " " not in lower:
+        return True
     for pat in BAD_NAME_PATTERNS:
         if re.search(pat, lower):
+            return True
+    for pat in GENRE_PATTERNS:
+        if re.search(pat, lower, re.IGNORECASE):
             return True
     return False
 
@@ -132,11 +159,15 @@ async def discover_for_label(db, label_id: str):
                     continue
                 if is_likely_slop(ch.get("name") or ""):
                     continue
-                popularity = ch.get("popularity")
-                followers = ch.get("followers")
-                if popularity is not None and followers is not None:
-                    if popularity < 10 and followers < 1000:
-                        continue
+                popularity = ch.get("popularity") or 0
+                followers = ch.get("followers") or 0
+                # Require meaningful Spotify presence — real artists have
+                # followers and popularity; genre pages and compilations don't
+                if followers < 500 or popularity < 5:
+                    continue
+                # No genres on Spotify usually means it's not a real artist
+                if not ch.get("genres"):
+                    continue
                 # Skip if already exists by name
                 existing_by_name = await db.execute(
                     select(Artist).where(Artist.name == ch["name"])
@@ -190,8 +221,9 @@ async def discover_for_label(db, label_id: str):
                     continue
                 listeners = ch.get("listeners", 0)
                 playcount = ch.get("playcount", 0)
-                # Filter out artists with very low engagement
-                if listeners < 50 and playcount < 500:
+                # Require real listener counts — genre pages have inflated
+                # playcounts but legitimate artist-level engagement
+                if listeners < 500 or playcount < 5000:
                     continue
                 # Skip if already exists by name
                 existing_by_name = await db.execute(

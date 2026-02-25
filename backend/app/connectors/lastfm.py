@@ -62,28 +62,40 @@ class LastFMConnector:
             artists = [artists]
         
         for item in artists[:limit]:
-            # Get detailed info for play counts
             artist_name = item.get("name", "")
             if not artist_name:
                 continue
-            
+
+            mbid = item.get("mbid") or ""
+            # Skip entries without a MusicBrainz ID — these are usually
+            # genre tags or non-artist pages, not real musicians
+            if not mbid:
+                continue
+
             # Fetch detailed info for listener/play counts
             detail_data = await self._request("artist.getInfo", {"artist": artist_name})
             stats = {}
+            genres = []
+            image_url = None
             if detail_data and "artist" in detail_data:
                 artist_info = detail_data["artist"]
                 stats = {
                     "listeners": int(artist_info.get("stats", {}).get("listeners", 0)),
                     "playcount": int(artist_info.get("stats", {}).get("playcount", 0)),
                 }
-            
+                tags = artist_info.get("tags", {}).get("tag", [])
+                if isinstance(tags, dict):
+                    tags = [tags]
+                genres = [t.get("name", "") for t in tags if t.get("name")]
+                image_url = self._extract_image_url(artist_info.get("image", []))
+
             results.append({
-                "platform_id": item.get("mbid") or artist_name.lower().replace(" ", "-"),  # Use name as fallback ID
+                "platform_id": mbid,
                 "name": artist_name,
-                "description": item.get("name"),  # Last.fm search doesn't provide description
-                "image_url": None,  # Would need to fetch from getInfo
+                "description": None,
+                "image_url": image_url,
                 "platform_url": item.get("url"),
-                "genres": [],  # Would need to fetch from getInfo
+                "genres": genres,
                 "listeners": stats.get("listeners", 0),
                 "playcount": stats.get("playcount", 0),
             })
