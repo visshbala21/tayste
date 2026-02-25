@@ -26,7 +26,6 @@ from app.connectors.identity import detect_platform_from_url, extract_platform_i
 from app.services.pipeline_queue import pipeline_queue
 from app.services.roster_files import extract_text_from_upload
 from app.jobs import ingest as ingest_job
-from app.jobs import discover as discover_job
 from app.jobs import score as score_job
 from app.jobs import llm_enrich as llm_job
 

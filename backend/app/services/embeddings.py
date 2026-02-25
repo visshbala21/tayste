@@ -22,18 +22,18 @@ def build_metric_vector(snapshots: list[dict]) -> Optional[np.ndarray]:
         return None
     latest = snapshots[-1]
     features = [
-        float(latest.get("followers", 0)),
-        float(latest.get("views", 0)),
-        float(latest.get("likes", 0)),
-        float(latest.get("comments", 0)),
-        float(latest.get("engagement_rate", 0)),
+        float(latest.get("followers") or 0),
+        float(latest.get("views") or 0),
+        float(latest.get("likes") or 0),
+        float(latest.get("comments") or 0),
+        float(latest.get("engagement_rate") or 0),
     ]
     # Growth features if we have history
     if len(snapshots) >= 2:
         prev = snapshots[0]
         for key in ["followers", "views", "likes"]:
-            curr_val = float(latest.get(key, 0))
-            prev_val = float(prev.get(key, 0))
+            curr_val = float(latest.get(key) or 0)
+            prev_val = float(prev.get(key) or 0)
             growth = (curr_val - prev_val) / max(prev_val, 1)
             features.append(growth)
     else:

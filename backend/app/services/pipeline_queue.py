@@ -7,7 +7,9 @@ from sqlalchemy import update
 from app.db.session import async_session_factory
 from app.models.tables import Label
 from app.jobs import ingest as ingest_job
-from app.jobs import discover as discover_job
+from app.jobs import pull_spotify_graph as spotify_graph_job
+from app.jobs import pull_soundcharts_candidates as sc_discover_job
+from app.jobs import enrich_soundcharts_artists as sc_enrich_job
 from app.jobs import score as score_job
 from app.jobs import llm_enrich as llm_job
 
@@ -66,8 +68,10 @@ class PipelineQueue:
     async def _run_pipeline(self, label_id: str):
         await self._set_status(label_id, "running", started_at=datetime.utcnow())
         try:
+            await spotify_graph_job.run()
+            await sc_discover_job.run()
+            await sc_enrich_job.run()
             await ingest_job.run()
-            await discover_job.run()
             await score_job.run()
             await llm_job.run()
             await self._set_status(label_id, "complete", completed_at=datetime.utcnow())

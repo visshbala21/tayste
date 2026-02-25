@@ -55,8 +55,10 @@ export default async function ArtistDetailPage({
               </div>
             )}
             <div className="flex gap-3">
-              {artist.platform_accounts.map((acc) => (
-                <a key={acc.platform_id} href={acc.platform_url || "#"} target="_blank" rel="noopener"
+              {artist.platform_accounts
+                .filter((acc) => acc.platform_url && ["spotify", "youtube", "tiktok", "instagram"].includes(acc.platform))
+                .map((acc) => (
+                <a key={acc.platform_id} href={acc.platform_url} target="_blank" rel="noopener"
                   className="text-xs text-accent hover:text-accent-light transition-colors duration-200">
                   {acc.platform}
                 </a>
