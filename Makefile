@@ -49,10 +49,10 @@ demo:
 	@sleep 10
 	@echo "Step 2: Seeding demo data..."
 	docker compose run --rm jobs app.jobs.seed_demo
-	@echo "Step 3: Spotify graph expansion..."
-	docker compose run --rm jobs app.jobs.pull_spotify_graph
-	@echo "Step 4: Soundcharts discovery + cross-referencing..."
+	@echo "Step 3: Soundcharts cross-referencing..."
 	docker compose run --rm jobs app.jobs.pull_soundcharts_candidates
+	@echo "Step 4: Related-artist graph discovery..."
+	docker compose run --rm jobs app.jobs.pull_spotify_graph
 	@echo "Step 5: Soundcharts enrichment..."
 	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
 	@echo "Step 6: Running supplemental ingestion..."

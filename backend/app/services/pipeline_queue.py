@@ -68,8 +68,8 @@ class PipelineQueue:
     async def _run_pipeline(self, label_id: str):
         await self._set_status(label_id, "running", started_at=datetime.utcnow())
         try:
-            await spotify_graph_job.run()
-            await sc_discover_job.run()
+            await sc_discover_job.run()      # Cross-ref roster with Soundcharts first
+            await spotify_graph_job.run()    # Walk SC related artists (needs UUIDs from above)
             await sc_enrich_job.run()
             await ingest_job.run()
             await score_job.run()
