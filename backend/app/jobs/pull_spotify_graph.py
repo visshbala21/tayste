@@ -74,23 +74,16 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
             if existing_name.scalar_one_or_none():
                 continue
 
-            # Get cross-platform IDs
+            # Get cross-platform IDs (single API call per artist)
             try:
                 ids = await sc.get_artist_identifiers(rel_uuid)
             except Exception:
                 ids = {}
 
-            # Get profile for genres/image
-            try:
-                profile = await sc.get_artist_profile(rel_uuid)
-            except Exception:
-                profile = None
-
             artist = Artist(
                 id=new_uuid(),
                 name=name,
-                image_url=artist_data.get("image_url") or (profile.get("image_url") if profile else None),
-                genre_tags=(profile.get("genres") if profile else None) or [],
+                image_url=artist_data.get("image_url"),
                 is_candidate=True,
             )
             db.add(artist)
