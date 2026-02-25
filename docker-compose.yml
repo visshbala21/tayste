@@ -31,7 +31,6 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       SPOTIFY_MARKET: ${SPOTIFY_MARKET:-US}
-      LASTFM_API_KEY: ${LASTFM_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -70,7 +69,6 @@ services:
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       SPOTIFY_MARKET: ${SPOTIFY_MARKET:-US}
-      LASTFM_API_KEY: ${LASTFM_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

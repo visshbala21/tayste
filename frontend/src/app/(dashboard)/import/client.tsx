@@ -34,12 +34,6 @@ export function ImportRosterClient() {
       "platform_id": "4Z8W30Rd5zhGzSmJmGK7gc",
       "platform_url": "https://open.spotify.com/artist/4Z8W30Rd5zhGzSmJmGK7gc",
       "genre_tags": ["dream-pop", "ambient"]
-    },
-    {
-      "name": "Ghost Antenna",
-      "platform": "lastfm",
-      "platform_id": "Ghost+Antenna",
-      "genre_tags": ["post-punk", "darkwave"]
     }
   ]
 }`;

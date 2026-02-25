@@ -8,10 +8,8 @@ from app.models.base import new_uuid
 import re
 from app.connectors.youtube import YouTubeConnector
 from app.connectors.spotify import SpotifyConnector
-from app.connectors.lastfm import LastFMConnector
 from app.llm.label_dna import generate_label_dna
 from app.llm.query_expansion import expand_queries
-from app.llm.candidate_suggestions import generate_candidate_suggestions
 from app.api.schemas import LabelDNAOutput
 
 logger = logging.getLogger(__name__)
@@ -95,15 +93,12 @@ async def discover_for_label(db, label_id: str):
 
     yt = YouTubeConnector()
     spotify = SpotifyConnector()
-    lastfm = LastFMConnector()
     discovered = 0
     yt_disabled = False
     yt_budget = 5
     yt_used = 0
     spotify_budget = 25
     spotify_used = 0
-    lastfm_budget = 30
-    lastfm_used = 0
     max_candidates = 60
 
     for query in queries:
@@ -120,6 +115,8 @@ async def discover_for_label(db, label_id: str):
                 else:
                     channels = []
             for ch in channels:
+                if is_likely_slop(ch.get("name") or ""):
+                    continue
                 # Check if already exists
                 result = await db.execute(
                     select(PlatformAccount).where(
@@ -205,105 +202,11 @@ async def discover_for_label(db, label_id: str):
                 db.add(account)
                 discovered += 1
 
-        if lastfm.available and lastfm_used < lastfm_budget and discovered < max_candidates:
-            try:
-                lf_results = await lastfm.search_artists(query, limit=5)
-            except Exception:
-                lf_results = []
-            lastfm_used += 1
-            for ch in lf_results:
-                if discovered >= max_candidates:
-                    break
-                if not ch.get("platform_id"):
-                    continue
-                name = ch.get("name") or ""
-                if is_likely_slop(name):
-                    continue
-                listeners = ch.get("listeners", 0)
-                playcount = ch.get("playcount", 0)
-                # Require real listener counts — genre pages have inflated
-                # playcounts but legitimate artist-level engagement
-                if listeners < 500 or playcount < 5000:
-                    continue
-                # Skip if already exists by name
-                existing_by_name = await db.execute(
-                    select(Artist).where(Artist.name == name)
-                )
-                if existing_by_name.scalar_one_or_none():
-                    continue
-                # Check if already exists
-                result = await db.execute(
-                    select(PlatformAccount).where(
-                        PlatformAccount.platform == "lastfm",
-                        PlatformAccount.platform_id == ch.get("platform_id"),
-                    )
-                )
-                if result.scalar_one_or_none():
-                    continue
-
-                artist = Artist(
-                    id=new_uuid(),
-                    name=name,
-                    bio=ch.get("description"),
-                    image_url=ch.get("image_url"),
-                    genre_tags=ch.get("genres") or [],
-                    is_candidate=True,
-                )
-                db.add(artist)
-                await db.flush()
-
-                account = PlatformAccount(
-                    id=new_uuid(),
-                    artist_id=artist.id,
-                    platform="lastfm",
-                    platform_id=ch.get("platform_id") or "",
-                    platform_url=ch.get("platform_url"),
-                    platform_metadata={
-                        "listeners": listeners,
-                        "playcount": playcount,
-                    },
-                )
-                db.add(account)
-                discovered += 1
-
     await db.flush()
     logger.info(f"Discovered {discovered} new candidates for label {label.name}")
 
-    # Fallback: if nothing discovered, generate candidates via LLM
     if discovered == 0:
-        roster_result = await db.execute(
-            select(Artist.name).join(RosterMembership).where(
-                RosterMembership.label_id == label_id,
-                RosterMembership.is_active == True,
-            )
-        )
-        roster_names = [r[0] for r in roster_result.all()]
-        suggestions = generate_candidate_suggestions(
-            label.name,
-            label.description,
-            label.genre_tags or {},
-            roster_names,
-            limit=10,
-        )
-        if suggestions and suggestions.candidates:
-            for s in suggestions.candidates:
-                # Skip if already exists by name
-                existing = await db.execute(
-                    select(Artist).where(Artist.name == s.name)
-                )
-                if existing.scalar_one_or_none():
-                    continue
-                artist = Artist(
-                    id=new_uuid(),
-                    name=s.name,
-                    genre_tags=s.genres,
-                    bio="Generated candidate (no platform data)",
-                    is_candidate=True,
-                )
-                db.add(artist)
-                discovered += 1
-            await db.flush()
-            logger.info(f"Generated {discovered} fallback candidates for label {label.name}")
+        logger.warning(f"No candidates discovered for label {label.name} — all connectors returned empty")
 
 
 async def run():
