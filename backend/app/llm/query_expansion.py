@@ -21,14 +21,12 @@ Seed Queries: {label_dna.search_seed_queries}
 Generate JSON:
 {{
   "youtube_queries": ["10-15 YouTube search queries to find emerging artists matching this taste"],
-  "tiktok_tags": ["5-10 TikTok hashtags for discovery"],
-  "soundcloud_tags": ["5-10 SoundCloud tags for discovery"]
+  "tiktok_tags": ["5-10 TikTok hashtags for discovery"]
 }}"""
 
     fallback = QueryExpansionOutput(
         youtube_queries=label_dna.search_seed_queries,
         tiktok_tags=[],
-        soundcloud_tags=[],
     )
 
     result = llm_client.generate_safe(SYSTEM_PROMPT, user_prompt, QueryExpansionOutput, fallback=fallback)

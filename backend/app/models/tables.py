@@ -59,7 +59,7 @@ class PlatformAccount(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
-    platform: Mapped[str] = mapped_column(String(50), nullable=False)  # youtube, tiktok, soundcloud, spotify
+    platform: Mapped[str] = mapped_column(String(50), nullable=False)  # youtube, spotify, lastfm, tiktok
     platform_id: Mapped[str] = mapped_column(String(255), nullable=False)
     platform_url: Mapped[Optional[str]] = mapped_column(String(512))
     platform_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)

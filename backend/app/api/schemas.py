@@ -228,7 +228,6 @@ class LabelDNAOutput(BaseModel):
 class QueryExpansionOutput(BaseModel):
     youtube_queries: List[str]
     tiktok_tags: List[str]
-    soundcloud_tags: List[str]
 
 
 class ArtistBriefOutput(BaseModel):
