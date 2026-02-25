@@ -8,7 +8,7 @@ from app.models.base import new_uuid
 import re
 from app.connectors.youtube import YouTubeConnector
 from app.connectors.spotify import SpotifyConnector
-from app.connectors.soundcloud import SoundCloudConnector
+from app.connectors.lastfm import LastFMConnector
 from app.llm.label_dna import generate_label_dna
 from app.llm.query_expansion import expand_queries
 from app.llm.candidate_suggestions import generate_candidate_suggestions
@@ -68,15 +68,15 @@ async def discover_for_label(db, label_id: str):
 
     yt = YouTubeConnector()
     spotify = SpotifyConnector()
-    soundcloud = SoundCloudConnector()
+    lastfm = LastFMConnector()
     discovered = 0
     yt_disabled = False
     yt_budget = 5
     yt_used = 0
     spotify_budget = 25
     spotify_used = 0
-    soundcloud_budget = 20
-    soundcloud_used = 0
+    lastfm_budget = 30
+    lastfm_used = 0
     max_candidates = 60
 
     for query in queries:
@@ -174,13 +174,13 @@ async def discover_for_label(db, label_id: str):
                 db.add(account)
                 discovered += 1
 
-        if soundcloud.available and soundcloud_used < soundcloud_budget and discovered < max_candidates:
+        if lastfm.available and lastfm_used < lastfm_budget and discovered < max_candidates:
             try:
-                sc_results = await soundcloud.search_users(query, limit=5)
+                lf_results = await lastfm.search_artists(query, limit=5)
             except Exception:
-                sc_results = []
-            soundcloud_used += 1
-            for ch in sc_results:
+                lf_results = []
+            lastfm_used += 1
+            for ch in lf_results:
                 if discovered >= max_candidates:
                     break
                 if not ch.get("platform_id"):
@@ -188,11 +188,11 @@ async def discover_for_label(db, label_id: str):
                 name = ch.get("name") or ""
                 if is_likely_slop(name):
                     continue
-                followers = ch.get("followers")
-                track_count = ch.get("track_count")
-                if followers is not None and track_count is not None:
-                    if followers < 100 and track_count < 3:
-                        continue
+                listeners = ch.get("listeners", 0)
+                playcount = ch.get("playcount", 0)
+                # Filter out artists with very low engagement
+                if listeners < 50 and playcount < 500:
+                    continue
                 # Skip if already exists by name
                 existing_by_name = await db.execute(
                     select(Artist).where(Artist.name == name)
@@ -202,29 +202,19 @@ async def discover_for_label(db, label_id: str):
                 # Check if already exists
                 result = await db.execute(
                     select(PlatformAccount).where(
-                        PlatformAccount.platform == "soundcloud",
+                        PlatformAccount.platform == "lastfm",
                         PlatformAccount.platform_id == ch.get("platform_id"),
                     )
                 )
                 if result.scalar_one_or_none():
                     continue
 
-                genre_tags = []
-                if ch.get("genre"):
-                    genre_tags.append(ch["genre"])
-                tag_list = ch.get("tag_list")
-                if tag_list:
-                    if isinstance(tag_list, str):
-                        genre_tags.extend([t for t in tag_list.split() if t])
-                    elif isinstance(tag_list, list):
-                        genre_tags.extend(tag_list)
-
                 artist = Artist(
                     id=new_uuid(),
                     name=name,
                     bio=ch.get("description"),
                     image_url=ch.get("image_url"),
-                    genre_tags=genre_tags,
+                    genre_tags=ch.get("genres") or [],
                     is_candidate=True,
                 )
                 db.add(artist)
@@ -233,11 +223,12 @@ async def discover_for_label(db, label_id: str):
                 account = PlatformAccount(
                     id=new_uuid(),
                     artist_id=artist.id,
-                    platform="soundcloud",
+                    platform="lastfm",
                     platform_id=ch.get("platform_id") or "",
                     platform_url=ch.get("platform_url"),
                     platform_metadata={
-                        "soundcloud_handle": ch.get("handle"),
+                        "listeners": listeners,
+                        "playcount": playcount,
                     },
                 )
                 db.add(account)

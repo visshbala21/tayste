@@ -27,6 +27,8 @@ services:
         value: US
       - key: SOUNDCLOUD_CLIENT_ID
         sync: false
+      - key: LASTFM_API_KEY
+        sync: false
 
 databases:
   - name: tayste-db

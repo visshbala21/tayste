@@ -6,6 +6,7 @@ SPOTIFY_ARTIST_RE = re.compile(r"open\.spotify\.com/artist/([a-zA-Z0-9]+)", re.I
 SPOTIFY_URI_RE = re.compile(r"spotify:artist:([a-zA-Z0-9]+)", re.IGNORECASE)
 TIKTOK_HANDLE_RE = re.compile(r"tiktok\.com/@([a-zA-Z0-9._-]+)", re.IGNORECASE)
 SOUNDCLOUD_HANDLE_RE = re.compile(r"soundcloud\.com/([a-zA-Z0-9._-]+)", re.IGNORECASE)
+LASTFM_ARTIST_RE = re.compile(r"last\.fm/(?:music/)?([^/?]+)", re.IGNORECASE)
 
 
 def detect_platform_from_url(url: str) -> str | None:
@@ -18,6 +19,8 @@ def detect_platform_from_url(url: str) -> str | None:
         return "spotify"
     if "soundcloud.com" in u:
         return "soundcloud"
+    if "last.fm" in u:
+        return "lastfm"
     if "tiktok.com" in u:
         return "tiktok"
     return None
@@ -52,6 +55,12 @@ def extract_platform_id(platform: str, url: str) -> str | None:
         match = SOUNDCLOUD_HANDLE_RE.search(url)
         if match:
             return match.group(1)
+        return None
+
+    if platform == "lastfm":
+        match = LASTFM_ARTIST_RE.search(url)
+        if match:
+            return match.group(1).replace("+", " ")
         return None
 
     return None

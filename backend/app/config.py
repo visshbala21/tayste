@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
     spotify_market: str = "US"
-    soundcloud_client_id: str = ""
+    lastfm_api_key: str = ""
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
 
