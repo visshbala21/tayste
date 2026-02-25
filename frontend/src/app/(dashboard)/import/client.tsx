@@ -18,7 +18,7 @@ type EditableEntry = {
 };
 
 export function ImportRosterClient() {
-  const sampleJson = `Sample JSON (all fields):
+  const sampleJson = `Sample JSON (multi-platform):
 {
   "artists": [
     {
@@ -27,6 +27,19 @@ export function ImportRosterClient() {
       "platform_id": "UCxxxxxxxxxxxxxxxxxxxx",
       "platform_url": "https://youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxx",
       "genre_tags": ["indie-rock", "shoegaze"]
+    },
+    {
+      "name": "Pale Meridian",
+      "platform": "spotify",
+      "platform_id": "4Z8W30Rd5zhGzSmJmGK7gc",
+      "platform_url": "https://open.spotify.com/artist/4Z8W30Rd5zhGzSmJmGK7gc",
+      "genre_tags": ["dream-pop", "ambient"]
+    },
+    {
+      "name": "Ghost Antenna",
+      "platform": "lastfm",
+      "platform_id": "Ghost+Antenna",
+      "genre_tags": ["post-punk", "darkwave"]
     }
   ]
 }`;
@@ -206,7 +219,7 @@ export function ImportRosterClient() {
             className="bg-surface-light border border-border rounded px-3 py-2 min-h-[24rem]"
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
-            placeholder={`${sampleJson}\n\nFreeform examples:\nVelvet Collapse - https://youtube.com/channel/UC...\nPale Meridian (dream-pop, ambient)\n@ghostantenna https://youtube.com/@ghostantenna`}
+            placeholder={`${sampleJson}\n\nFreeform examples:\nVelvet Collapse - https://youtube.com/channel/UC...\nPale Meridian - https://open.spotify.com/artist/4Z8W30...\nGhost Antenna (post-punk, darkwave)\n@duskprotocol https://youtube.com/@duskprotocol`}
           />
           <input
             type="file"

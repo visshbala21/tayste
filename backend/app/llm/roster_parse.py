@@ -13,7 +13,7 @@ SYSTEM_PROMPT = """You are a data normalization assistant for music rosters.
 Extract artist roster entries from raw text. Output ONLY valid JSON that matches the schema.
 Rules:
 - Return every artist entry you can identify.
-- Include platform if explicitly mentioned (youtube, tiktok, soundcloud, spotify).
+- Include platform if explicitly mentioned (youtube, spotify, soundcloud, lastfm, tiktok).
 - If a URL is present, include it as platform_url.
 - If a YouTube channel ID is present (starts with UC...), include as platform_id.
 - If only a handle is present (e.g. @artist), keep it in platform_url if possible, otherwise omit.
@@ -35,6 +35,8 @@ def _detect_platform(url: str, default_platform: str) -> str:
         return "tiktok"
     if "spotify.com" in lower:
         return "spotify"
+    if "last.fm" in lower or "lastfm" in lower:
+        return "lastfm"
     return default_platform
 
 
