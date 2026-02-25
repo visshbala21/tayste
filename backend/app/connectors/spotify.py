@@ -54,8 +54,11 @@ class SpotifyConnector:
                 resp.raise_for_status()
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code if e.response else None
-                if status in {401, 403, 429}:
+                if status in {401, 429}:
                     self._disabled = True
+                    return None
+                if status == 403:
+                    # Don't globally disable — some endpoints may still work
                     return None
                 raise
             return resp.json()
@@ -75,6 +78,26 @@ class SpotifyConnector:
                 "platform_id": item.get("id"),
                 "name": item.get("name"),
                 "description": None,
+                "image_url": (item.get("images") or [{}])[0].get("url"),
+                "platform_url": (item.get("external_urls") or {}).get("spotify"),
+                "genres": item.get("genres") or [],
+                "followers": (item.get("followers") or {}).get("total"),
+                "popularity": item.get("popularity"),
+            })
+        return results
+
+    async def get_related_artists(self, artist_id: str) -> list[dict]:
+        """Get up to 20 related artists for a Spotify artist."""
+        if not self.available:
+            return []
+        data = await self._request(f"/artists/{artist_id}/related-artists")
+        if not data:
+            return []
+        results = []
+        for item in data.get("artists", []):
+            results.append({
+                "platform_id": item.get("id"),
+                "name": item.get("name"),
                 "image_url": (item.get("images") or [{}])[0].get("url"),
                 "platform_url": (item.get("external_urls") or {}).get("spotify"),
                 "genres": item.get("genres") or [],

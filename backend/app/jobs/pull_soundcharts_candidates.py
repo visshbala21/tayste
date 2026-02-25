@@ -1,10 +1,10 @@
-"""Discovery job: find new candidate artists via Soundcharts rising charts,
-with fallback to legacy discover.py + Soundcharts cross-referencing.
+"""Discovery job: find new candidate artists via Soundcharts rising charts
++ cross-reference all Spotify-linked artists with Soundcharts for enrichment.
 
-When SC discovery endpoint (POST /top/artists) is available, uses it directly.
-When gated (403), falls back to legacy discover.py for candidate finding, then
-cross-references all newly discovered artists with Soundcharts so they can be
-enriched with time-series data.
+When SC discovery endpoint (POST /top/artists) is available (Growth+ tier),
+uses it directly. On Starter tier (403), skips SC discovery and relies on
+Spotify graph (pull_spotify_graph.py) for candidate finding. Always
+cross-references artists with Soundcharts so they can be enriched.
 """
 import asyncio
 import logging
@@ -13,7 +13,7 @@ from app.db.session import async_session_factory
 from app.models.tables import Label, Artist, PlatformAccount
 from app.models.base import new_uuid
 from app.connectors.soundcharts import SoundchartsConnector
-from app.jobs.discover import discover_for_label, is_likely_slop
+from app.jobs.discover import is_likely_slop
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ MAX_CANDIDATES_PER_LABEL = 100
 async def _crossref_with_soundcharts(db, sc: SoundchartsConnector):
     """Cross-reference artists that have Spotify accounts but no Soundcharts account.
 
-    This ensures artists discovered via legacy discover.py or Spotify graph
-    get Soundcharts UUIDs so they can be enriched with time-series data.
+    This ensures artists discovered via Spotify graph get Soundcharts UUIDs
+    so they can be enriched with time-series data.
     """
     if not sc.available:
         return
@@ -80,17 +80,18 @@ async def _crossref_with_soundcharts(db, sc: SoundchartsConnector):
 
 
 async def pull_for_label(db, label_id: str):
-    """Discover candidate artists for a label via Soundcharts."""
+    """Discover candidate artists for a label via Soundcharts rising charts.
+
+    If SC discovery endpoint is gated (403 on Starter), this gracefully
+    returns 0 candidates. Spotify graph handles discovery in that case.
+    """
     label = await db.get(Label, label_id)
     if not label:
         return
 
     sc = SoundchartsConnector()
-
-    # Fallback to legacy discovery if Soundcharts unavailable
     if not sc.available:
-        logger.info(f"Soundcharts unavailable, falling back to legacy discover for {label.name}")
-        await discover_for_label(db, label_id)
+        logger.info(f"Soundcharts unavailable, skipping SC discovery for {label.name}")
         return
 
     # Extract genre targets from label
@@ -108,8 +109,7 @@ async def pull_for_label(db, label_id: str):
                 genres.append(g)
 
     if not genres:
-        logger.warning(f"No genres for label {label.name}, using label name as fallback search")
-        genres = [label.name]
+        return
 
     discovered = 0
 
@@ -127,11 +127,10 @@ async def pull_for_label(db, label_id: str):
                 period="month",
             )
         except Exception as e:
-            logger.error(f"Soundcharts get_rising_artists failed for genre '{genre}': {e}")
-            if sc._is_circuit_open():
-                logger.info(f"Circuit breaker open, falling back to legacy discover for {label.name}")
-                await discover_for_label(db, label_id)
-                return
+            logger.warning(f"SC get_rising_artists failed for genre '{genre}': {e}")
+            continue
+
+        if not rising:
             continue
 
         for artist_data in rising:
@@ -145,7 +144,6 @@ async def pull_for_label(db, label_id: str):
             if is_likely_slop(name):
                 continue
 
-            # Skip if we already have this Soundcharts UUID
             existing = await db.execute(
                 select(PlatformAccount).where(
                     PlatformAccount.platform == "soundcharts",
@@ -155,7 +153,6 @@ async def pull_for_label(db, label_id: str):
             if existing.scalar_one_or_none():
                 continue
 
-            # Create artist
             artist = Artist(
                 id=new_uuid(),
                 name=name,
@@ -166,7 +163,6 @@ async def pull_for_label(db, label_id: str):
             db.add(artist)
             await db.flush()
 
-            # Create Soundcharts platform account
             sc_account = PlatformAccount(
                 id=new_uuid(),
                 artist_id=artist.id,
@@ -176,7 +172,6 @@ async def pull_for_label(db, label_id: str):
             )
             db.add(sc_account)
 
-            # Resolve cross-platform IDs via single identifiers call
             try:
                 ids = await sc.get_artist_identifiers(sc_uuid)
             except Exception:
@@ -191,14 +186,11 @@ async def pull_for_label(db, label_id: str):
                     )
                 )
                 if not sp_existing.scalar_one_or_none():
-                    sp_account = PlatformAccount(
-                        id=new_uuid(),
-                        artist_id=artist.id,
-                        platform="spotify",
+                    db.add(PlatformAccount(
+                        id=new_uuid(), artist_id=artist.id, platform="spotify",
                         platform_id=spotify_id,
                         platform_url=f"https://open.spotify.com/artist/{spotify_id}",
-                    )
-                    db.add(sp_account)
+                    ))
 
             yt_id = ids.get("youtube")
             if yt_id:
@@ -209,27 +201,21 @@ async def pull_for_label(db, label_id: str):
                     )
                 )
                 if not yt_existing.scalar_one_or_none():
-                    yt_account = PlatformAccount(
-                        id=new_uuid(),
-                        artist_id=artist.id,
-                        platform="youtube",
+                    db.add(PlatformAccount(
+                        id=new_uuid(), artist_id=artist.id, platform="youtube",
                         platform_id=yt_id,
                         platform_url=f"https://youtube.com/channel/{yt_id}",
-                    )
-                    db.add(yt_account)
+                    ))
 
             discovered += 1
 
     await db.flush()
-    logger.info(f"Discovered {discovered} Soundcharts candidates for label {label.name}")
-
-    if discovered == 0:
-        logger.warning(f"No SC candidates for {label.name}, trying legacy discover as fallback")
-        await discover_for_label(db, label_id)
+    if discovered > 0:
+        logger.info(f"Discovered {discovered} SC candidates for label {label.name}")
 
 
 async def run():
-    logger.info("Starting Soundcharts candidate discovery...")
+    logger.info("Starting Soundcharts candidate discovery + cross-referencing...")
     async with async_session_factory() as db:
         result = await db.execute(select(Label.id))
         label_ids = [r[0] for r in result.all()]
@@ -244,7 +230,7 @@ async def run():
         await _crossref_with_soundcharts(db, sc)
 
         await db.commit()
-    logger.info("Soundcharts candidate discovery complete.")
+    logger.info("Soundcharts candidate discovery + cross-referencing complete.")
 
 
 if __name__ == "__main__":
