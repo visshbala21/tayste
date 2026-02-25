@@ -1,5 +1,5 @@
 // Server-side (SSR) uses Docker internal network; client-side uses the browser-accessible URL.
-const SERVER_API_BASE = process.env.INTERNAL_API_URL || "http://backend:8000";
+const SERVER_API_BASE = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
 const CLIENT_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
 function getApiBase(): string {

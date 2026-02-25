@@ -51,6 +51,7 @@ services:
       # Docker network, not via the host port. The backend listens on 8000 in
       # the container, exposed as 8001 on the host.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      INTERNAL_API_URL: http://backend:8000
     depends_on:
       - backend
     volumes:
