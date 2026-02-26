@@ -43,15 +43,68 @@ class YouTubeConnector:
                 })
             return results
 
+    async def _resolve_channel_id(self, identifier: str) -> Optional[str]:
+        if not identifier:
+            return None
+        raw = identifier.strip()
+        if raw.startswith("UC") and len(raw) >= 20:
+            return raw
+
+        handle = raw
+        if handle.startswith("@"):
+            handle = handle[1:]
+
+        async with httpx.AsyncClient() as client:
+            # Try handle lookup (YouTube handles)
+            resp = await client.get(f"{YOUTUBE_API_BASE}/channels", params={
+                "key": self.api_key,
+                "part": "id",
+                "forHandle": handle,
+            })
+            if resp.status_code == 200:
+                items = resp.json().get("items", [])
+                if items:
+                    return items[0].get("id")
+
+            # Try legacy username lookup
+            resp = await client.get(f"{YOUTUBE_API_BASE}/channels", params={
+                "key": self.api_key,
+                "part": "id",
+                "forUsername": handle,
+            })
+            if resp.status_code == 200:
+                items = resp.json().get("items", [])
+                if items:
+                    return items[0].get("id")
+
+        # Fallback to search
+        try:
+            results = await self.search_channels(raw, max_results=1)
+        except Exception:
+            return None
+        if results:
+            return results[0].get("platform_id")
+        return None
+
     async def get_channel_stats(self, channel_id: str) -> Optional[dict]:
         """Get channel statistics."""
         if not self.available:
             return self._mock_channel_stats(channel_id)
+        resolved = channel_id
+        if not channel_id.startswith("UC"):
+            resolved = await self._resolve_channel_id(channel_id) or channel_id
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{YOUTUBE_API_BASE}/channels", params={
-                "key": self.api_key, "id": channel_id,
+                "key": self.api_key, "id": resolved,
                 "part": "statistics,snippet",
             })
+            if resp.status_code in (400, 404):
+                return None
+            if resp.status_code in (403, 429):
+                raise httpx.HTTPStatusError(
+                    f"YouTube quota/auth error: {resp.status_code}",
+                    request=resp.request, response=resp,
+                )
             resp.raise_for_status()
             data = resp.json()
             items = data.get("items", [])
@@ -72,9 +125,12 @@ class YouTubeConnector:
         """
         if not self.available:
             return self._mock_recent_videos(channel_id)
+        resolved = channel_id
+        if not channel_id.startswith("UC"):
+            resolved = await self._resolve_channel_id(channel_id) or channel_id
         async with httpx.AsyncClient() as client:
             # Derive uploads playlist ID from channel ID (UC -> UU)
-            uploads_playlist_id = "UU" + channel_id[2:] if channel_id.startswith("UC") else None
+            uploads_playlist_id = "UU" + resolved[2:] if resolved.startswith("UC") else None
             if not uploads_playlist_id:
                 return []
             # Use playlistItems.list (1 unit) instead of search.list (100 units)

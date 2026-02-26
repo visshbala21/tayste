@@ -37,6 +37,9 @@ def extract_platform_id(platform: str, url: str) -> str | None:
         match = YOUTUBE_CHANNEL_RE.search(url)
         if match:
             return match.group(1)
+        handle_match = YOUTUBE_HANDLE_RE.search(url)
+        if handle_match:
+            return f"@{handle_match.group(1)}"
         return None
 
     if platform == "spotify":
