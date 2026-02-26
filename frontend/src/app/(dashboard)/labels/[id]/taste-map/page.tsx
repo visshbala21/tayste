@@ -34,6 +34,9 @@ export default async function TasteMapPage({ params }: { params: Promise<{ id: s
             <Link href={`/labels/${id}/scout-feed`} className="text-sm bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-all duration-200">
               Scout Feed
             </Link>
+            <Link href={`/labels/${id}/watchlists`} className="text-sm bg-surface-light text-muted px-3 py-1.5 rounded-lg hover:text-gray-200 transition-all duration-200">
+              Watchlists
+            </Link>
             <Link href="/dashboard" className="text-sm bg-surface-light text-muted px-3 py-1.5 rounded-lg hover:text-gray-200 transition-all duration-200">
               All Labels
             </Link>
@@ -68,11 +71,25 @@ export default async function TasteMapPage({ params }: { params: Promise<{ id: s
             </div>
             <p className="text-muted text-sm mb-2">{cluster.artist_ids.length} artists</p>
             <div className="flex flex-wrap gap-1">
-              {cluster.artist_ids.slice(0, 5).map((aid) => (
-                <span key={aid} className="text-xs bg-surface-light px-2 py-0.5 rounded text-gray-400">
-                  {aid.slice(0, 8)}...
-                </span>
-              ))}
+              {(() => {
+                const names = cluster.artist_names && cluster.artist_names.length > 0
+                  ? cluster.artist_names
+                  : cluster.artist_ids.map((aid) => `${aid.slice(0, 8)}...`);
+                const preview = names.slice(0, 6);
+                const extra = names.length - preview.length;
+                return (
+                  <>
+                    {preview.map((name) => (
+                      <span key={name} className="text-xs bg-surface-light px-2 py-0.5 rounded text-gray-400">
+                        {name}
+                      </span>
+                    ))}
+                    {extra > 0 && (
+                      <span className="text-xs text-muted px-2 py-0.5">+{extra} more</span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         ))}

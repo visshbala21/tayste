@@ -33,6 +33,10 @@ class Label(Base, TimestampMixin):
     clusters: Mapped[List["LabelCluster"]] = relationship(back_populates="label")
     recommendations: Mapped[List["Recommendation"]] = relationship(back_populates="label")
     feedback: Mapped[List["Feedback"]] = relationship(back_populates="label")
+    watchlists: Mapped[List["Watchlist"]] = relationship(back_populates="label")
+    alert_rules: Mapped[List["AlertRule"]] = relationship(back_populates="label")
+    alerts: Mapped[List["Alert"]] = relationship(back_populates="label")
+    artist_states: Mapped[List["LabelArtistState"]] = relationship(back_populates="label")
 
 
 class Artist(Base, TimestampMixin):
@@ -52,6 +56,9 @@ class Artist(Base, TimestampMixin):
     features: Mapped[List["ArtistFeature"]] = relationship(back_populates="artist")
     recommendations: Mapped[List["Recommendation"]] = relationship(back_populates="artist")
     llm_briefs: Mapped[List["ArtistLLMBrief"]] = relationship(back_populates="artist")
+    watchlist_items: Mapped[List["WatchlistItem"]] = relationship(back_populates="artist")
+    alerts: Mapped[List["Alert"]] = relationship(back_populates="artist")
+    label_states: Mapped[List["LabelArtistState"]] = relationship(back_populates="artist")
 
 
 class PlatformAccount(Base, TimestampMixin):
@@ -201,6 +208,101 @@ class Feedback(Base, TimestampMixin):
     context: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
 
     label: Mapped["Label"] = relationship(back_populates="feedback")
+
+
+class LabelArtistState(Base, TimestampMixin):
+    __tablename__ = "label_artist_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="new")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    label: Mapped["Label"] = relationship(back_populates="artist_states")
+    artist: Mapped["Artist"] = relationship(back_populates="label_states")
+
+    __table_args__ = (
+        UniqueConstraint("label_id", "artist_id", name="uq_label_artist_state"),
+        Index("ix_label_artist_state_label_stage", "label_id", "stage"),
+    )
+
+
+class Watchlist(Base, TimestampMixin):
+    __tablename__ = "watchlists"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    label: Mapped["Label"] = relationship(back_populates="watchlists")
+    items: Mapped[List["WatchlistItem"]] = relationship(back_populates="watchlist")
+
+    __table_args__ = (
+        UniqueConstraint("label_id", "name", name="uq_watchlist_label_name"),
+        Index("ix_watchlist_label", "label_id"),
+    )
+
+
+class WatchlistItem(Base, TimestampMixin):
+    __tablename__ = "watchlist_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    watchlist_id: Mapped[str] = mapped_column(ForeignKey("watchlists.id"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(String(50), default="manual")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    watchlist: Mapped["Watchlist"] = relationship(back_populates="items")
+    artist: Mapped["Artist"] = relationship(back_populates="watchlist_items")
+
+    __table_args__ = (
+        UniqueConstraint("watchlist_id", "artist_id", name="uq_watchlist_item"),
+        Index("ix_watchlist_item_watchlist", "watchlist_id"),
+    )
+
+
+class AlertRule(Base, TimestampMixin):
+    __tablename__ = "alert_rules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), default="medium")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    criteria: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+
+    label: Mapped["Label"] = relationship(back_populates="alert_rules")
+    alerts: Mapped[List["Alert"]] = relationship(back_populates="rule")
+
+    __table_args__ = (
+        Index("ix_alert_rule_label", "label_id"),
+    )
+
+
+class Alert(Base, TimestampMixin):
+    __tablename__ = "alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+    watchlist_id: Mapped[Optional[str]] = mapped_column(ForeignKey("watchlists.id"))
+    rule_id: Mapped[Optional[str]] = mapped_column(ForeignKey("alert_rules.id"))
+    severity: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(20), default="new")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    context: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+
+    label: Mapped["Label"] = relationship(back_populates="alerts")
+    artist: Mapped["Artist"] = relationship(back_populates="alerts")
+    rule: Mapped[Optional["AlertRule"]] = relationship(back_populates="alerts")
+
+    __table_args__ = (
+        Index("ix_alert_label_status_created", "label_id", "status", "created_at"),
+    )
 
 
 class ArtistLLMBrief(Base, TimestampMixin):

@@ -1,13 +1,14 @@
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.tables import (
     Label, Artist, PlatformAccount, RosterMembership,
     Snapshot, LabelCluster, ArtistFeature, Recommendation,
-    Feedback, ArtistLLMBrief,
+    Feedback, ArtistLLMBrief, Watchlist, WatchlistItem, Alert, LabelArtistState,
+    AlertRule,
 )
 from app.models.base import new_uuid
 from app.api.schemas import (
@@ -17,6 +18,9 @@ from app.api.schemas import (
     ScoutFeedResponse, ScoutFeedItem,
     TasteMapResponse, ClusterInfo,
     FeedbackInput, FeedbackResponse,
+    WatchlistCreate, WatchlistResponse, WatchlistDetailResponse,
+    WatchlistItemInput, WatchlistItemResponse,
+    AlertResponse, AlertStatusInput, StageUpdateInput,
     LabelImportInput, RosterImportInput, RosterImportResult, RosterParsedArtist,
     RosterConfirmInput, RosterConfirmExistingInput,
 )
@@ -43,6 +47,63 @@ def _extract_youtube_channel_id(url: str) -> str | None:
         if channel_id.startswith("UC"):
             return channel_id
     return None
+
+
+def _format_growth(value: float | None) -> str | None:
+    if value is None:
+        return None
+    sign = "+" if value > 0 else ""
+    return f"{sign}{abs(value) * 100:.0f}%"
+
+
+async def _ensure_default_watchlist(db: AsyncSession, label_id: str) -> Watchlist:
+    result = await db.execute(
+        select(Watchlist).where(Watchlist.label_id == label_id)
+    )
+    watchlist = result.scalar_one_or_none()
+    if watchlist:
+        return watchlist
+    watchlist = Watchlist(
+        id=new_uuid(),
+        label_id=label_id,
+        name="Pipeline",
+        description="Default watchlist for active scouting.",
+        is_active=True,
+    )
+    db.add(watchlist)
+    await db.flush()
+    return watchlist
+
+
+async def _upsert_stage(
+    db: AsyncSession,
+    label_id: str,
+    artist_id: str,
+    stage: str,
+    notes: str | None = None,
+) -> LabelArtistState:
+    result = await db.execute(
+        select(LabelArtistState).where(
+            LabelArtistState.label_id == label_id,
+            LabelArtistState.artist_id == artist_id,
+        )
+    )
+    state = result.scalar_one_or_none()
+    if state:
+        state.stage = stage
+        if notes:
+            state.notes = notes
+    else:
+        state = LabelArtistState(
+            id=new_uuid(),
+            label_id=label_id,
+            artist_id=artist_id,
+            stage=stage,
+            notes=notes,
+        )
+        db.add(state)
+    await db.flush()
+    return state
 
 
 async def _resolve_missing_platform_ids(
@@ -243,6 +304,7 @@ async def create_label(data: LabelCreate, db: AsyncSession = Depends(get_db)):
     label = Label(id=new_uuid(), name=data.name, description=data.description, genre_tags=data.genre_tags or {})
     db.add(label)
     await db.flush()
+    await _ensure_default_watchlist(db, label.id)
     await db.refresh(label)
     return label
 
@@ -347,6 +409,7 @@ async def import_label_from_text(data: LabelImportInput, db: AsyncSession = Depe
     )
     db.add(label)
     await db.flush()
+    await _ensure_default_watchlist(db, label.id)
 
     created, skipped, import_warnings = await _upsert_roster_entries(
         db, label.id, entries, data.default_platform
@@ -423,6 +486,7 @@ async def import_label_from_file(
     )
     db.add(label)
     await db.flush()
+    await _ensure_default_watchlist(db, label.id)
 
     created, skipped, import_warnings = await _upsert_roster_entries(
         db, label.id, entries, default_platform
@@ -469,6 +533,7 @@ async def import_label_from_confirm(data: RosterConfirmInput, db: AsyncSession =
     )
     db.add(label)
     await db.flush()
+    await _ensure_default_watchlist(db, label.id)
 
     created, skipped, import_warnings = await _upsert_roster_entries(
         db, label.id, entries, data.default_platform
@@ -659,6 +724,16 @@ async def get_taste_map(label_id: str, db: AsyncSession = Depends(get_db)):
         .order_by(LabelCluster.cluster_index)
     )
     clusters = result.scalars().all()
+    artist_name_map: dict[str, str] = {}
+    if clusters:
+        artist_ids = {
+            aid for cluster in clusters for aid in (cluster.artist_ids or [])
+        }
+        if artist_ids:
+            artist_result = await db.execute(
+                select(Artist.id, Artist.name).where(Artist.id.in_(artist_ids))
+            )
+            artist_name_map = {row[0]: row[1] for row in artist_result.all()}
 
     return TasteMapResponse(
         label_id=label_id,
@@ -670,6 +745,11 @@ async def get_taste_map(label_id: str, db: AsyncSession = Depends(get_db)):
                 cluster_index=c.cluster_index,
                 cluster_name=c.cluster_name,
                 artist_ids=c.artist_ids or [],
+                artist_names=[
+                    artist_name_map[aid]
+                    for aid in (c.artist_ids or [])
+                    if aid in artist_name_map
+                ],
             )
             for c in clusters
         ],
@@ -681,6 +761,11 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
     label = await db.get(Label, label_id)
     if not label:
         raise HTTPException(status_code=404, detail="Label not found")
+
+    cluster_result = await db.execute(
+        select(LabelCluster).where(LabelCluster.label_id == label_id)
+    )
+    cluster_map = {c.id: c for c in cluster_result.scalars().all()}
 
     # Get latest batch
     result = await db.execute(
@@ -702,6 +787,17 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
         ).order_by(Recommendation.final_score.desc()).limit(limit)
     )
     recs = result.scalars().all()
+    rec_artist_ids = [r.artist_id for r in recs]
+
+    stage_map: dict[str, str] = {}
+    if rec_artist_ids:
+        stage_result = await db.execute(
+            select(LabelArtistState).where(
+                LabelArtistState.label_id == label_id,
+                LabelArtistState.artist_id.in_(rec_artist_ids),
+            )
+        )
+        stage_map = {s.artist_id: s.stage for s in stage_result.scalars().all()}
 
     total_result = await db.execute(
         select(func.count()).select_from(Recommendation).where(
@@ -730,6 +826,29 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
             nearest = await db.get(Artist, rec.nearest_roster_artist_id)
             if nearest:
                 nearest_name = nearest.name
+        cluster_name = None
+        if rec.nearest_cluster_id:
+            cluster = cluster_map.get(rec.nearest_cluster_id)
+            if cluster:
+                cluster_name = cluster.cluster_name or f"Cluster {cluster.cluster_index + 1}"
+
+        reasons = []
+        if cluster_name:
+            reasons.append(f"Fit to {cluster_name}")
+        if nearest_name:
+            reasons.append(f"Similar to {nearest_name}")
+        growth_7d = features.growth_7d if features else None
+        growth_30d = features.growth_30d if features else None
+        if growth_7d is not None and growth_7d >= 0.1:
+            reasons.append(f"7d growth {_format_growth(growth_7d)}")
+        elif growth_30d is not None and growth_30d >= 0.2:
+            reasons.append(f"30d growth {_format_growth(growth_30d)}")
+        if features and features.momentum_score is not None and features.momentum_score >= 0.6:
+            reasons.append("Strong momentum")
+        if rec.risk_score is not None and rec.risk_score <= 0.1:
+            reasons.append("Low risk")
+        if len(reasons) > 3:
+            reasons = reasons[:3]
 
         items.append(ScoutFeedItem(
             artist_id=rec.artist_id,
@@ -740,9 +859,12 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
             risk_score=rec.risk_score,
             final_score=rec.final_score,
             nearest_roster_artist=nearest_name,
-            growth_7d=features.growth_7d if features else None,
-            growth_30d=features.growth_30d if features else None,
+            growth_7d=growth_7d,
+            growth_30d=growth_30d,
             genre_tags=artist.genre_tags,
+            score_breakdown=rec.score_breakdown or None,
+            reasons=reasons or None,
+            stage=stage_map.get(rec.artist_id),
         ))
 
     return ScoutFeedResponse(
@@ -751,7 +873,11 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
 
 
 @router.get("/artists/{artist_id}", response_model=ArtistDetailResponse)
-async def get_artist_detail(artist_id: str, db: AsyncSession = Depends(get_db)):
+async def get_artist_detail(
+    artist_id: str,
+    label_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     artist = await db.get(Artist, artist_id)
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
@@ -790,6 +916,18 @@ async def get_artist_detail(artist_id: str, db: AsyncSession = Depends(get_db)):
     )
     feedback_rows = result.scalars().all()
 
+    label_stage = None
+    if label_id:
+        stage_result = await db.execute(
+            select(LabelArtistState).where(
+                LabelArtistState.label_id == label_id,
+                LabelArtistState.artist_id == artist_id,
+            )
+        )
+        state = stage_result.scalar_one_or_none()
+        if state:
+            label_stage = state.stage
+
     return ArtistDetailResponse(
         id=artist.id,
         name=artist.name,
@@ -806,6 +944,7 @@ async def get_artist_detail(artist_id: str, db: AsyncSession = Depends(get_db)):
             {"action": f.action, "notes": f.notes, "created_at": str(f.created_at)}
             for f in feedback_rows
         ],
+        label_stage=label_stage,
     )
 
 
@@ -827,7 +966,259 @@ async def submit_feedback(label_id: str, data: FeedbackInput, db: AsyncSession =
     db.add(feedback)
     await db.flush()
     await db.refresh(feedback)
+    if data.action in {"shortlist", "sign", "pass", "archive"}:
+        await _upsert_stage(db, label_id, data.artist_id, data.action)
     return feedback
+
+
+@router.post("/labels/{label_id}/artists/{artist_id}/stage")
+async def update_artist_stage(
+    label_id: str,
+    artist_id: str,
+    data: StageUpdateInput,
+    db: AsyncSession = Depends(get_db),
+):
+    label = await db.get(Label, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    artist = await db.get(Artist, artist_id)
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    state = await _upsert_stage(db, label_id, artist_id, data.stage, data.notes)
+    return {"status": "ok", "stage": state.stage}
+
+
+@router.get("/labels/{label_id}/watchlists", response_model=list[WatchlistResponse])
+async def list_watchlists(label_id: str, db: AsyncSession = Depends(get_db)):
+    label = await db.get(Label, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    await _ensure_default_watchlist(db, label_id)
+    result = await db.execute(
+        select(Watchlist, func.count(WatchlistItem.id))
+        .outerjoin(WatchlistItem, WatchlistItem.watchlist_id == Watchlist.id)
+        .where(Watchlist.label_id == label_id)
+        .group_by(Watchlist.id)
+        .order_by(Watchlist.created_at.asc())
+    )
+    rows = result.all()
+    return [
+        WatchlistResponse(
+            id=w.id,
+            label_id=w.label_id,
+            name=w.name,
+            description=w.description,
+            is_active=w.is_active,
+            item_count=int(count or 0),
+            created_at=w.created_at,
+            updated_at=w.updated_at,
+        )
+        for w, count in rows
+    ]
+
+
+@router.post("/labels/{label_id}/watchlists", response_model=WatchlistResponse)
+async def create_watchlist(
+    label_id: str,
+    data: WatchlistCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    label = await db.get(Label, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    watchlist = Watchlist(
+        id=new_uuid(),
+        label_id=label_id,
+        name=data.name,
+        description=data.description,
+        is_active=True,
+    )
+    db.add(watchlist)
+    await db.flush()
+    return WatchlistResponse(
+        id=watchlist.id,
+        label_id=watchlist.label_id,
+        name=watchlist.name,
+        description=watchlist.description,
+        is_active=watchlist.is_active,
+        item_count=0,
+        created_at=watchlist.created_at,
+        updated_at=watchlist.updated_at,
+    )
+
+
+@router.get("/labels/{label_id}/watchlists/{watchlist_id}", response_model=WatchlistDetailResponse)
+async def get_watchlist_detail(
+    label_id: str,
+    watchlist_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    watchlist = await db.get(Watchlist, watchlist_id)
+    if not watchlist or watchlist.label_id != label_id:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+
+    result = await db.execute(
+        select(WatchlistItem, Artist, LabelArtistState.stage)
+        .join(Artist, Artist.id == WatchlistItem.artist_id)
+        .outerjoin(
+            LabelArtistState,
+            and_(
+                LabelArtistState.label_id == label_id,
+                LabelArtistState.artist_id == Artist.id,
+            ),
+        )
+        .where(WatchlistItem.watchlist_id == watchlist_id)
+        .order_by(WatchlistItem.created_at.desc())
+    )
+    items = []
+    for item, artist, stage in result.all():
+        items.append(WatchlistItemResponse(
+            artist_id=artist.id,
+            artist_name=artist.name,
+            image_url=artist.image_url,
+            stage=stage,
+            added_at=item.created_at,
+            notes=item.notes,
+        ))
+
+    detail = WatchlistResponse(
+        id=watchlist.id,
+        label_id=watchlist.label_id,
+        name=watchlist.name,
+        description=watchlist.description,
+        is_active=watchlist.is_active,
+        item_count=len(items),
+        created_at=watchlist.created_at,
+        updated_at=watchlist.updated_at,
+    )
+    return WatchlistDetailResponse(watchlist=detail, items=items)
+
+
+@router.post("/labels/{label_id}/watchlists/{watchlist_id}/items", response_model=WatchlistItemResponse)
+async def add_watchlist_item(
+    label_id: str,
+    watchlist_id: str,
+    data: WatchlistItemInput,
+    db: AsyncSession = Depends(get_db),
+):
+    watchlist = await db.get(Watchlist, watchlist_id)
+    if not watchlist or watchlist.label_id != label_id:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    artist = await db.get(Artist, data.artist_id)
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+
+    existing = await db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.watchlist_id == watchlist_id,
+            WatchlistItem.artist_id == data.artist_id,
+        )
+    )
+    item = existing.scalar_one_or_none()
+    if not item:
+        item = WatchlistItem(
+            id=new_uuid(),
+            watchlist_id=watchlist_id,
+            artist_id=data.artist_id,
+            source="manual",
+            notes=data.notes,
+        )
+        db.add(item)
+        await db.flush()
+
+    stage = None
+    stage_result = await db.execute(
+        select(LabelArtistState).where(
+            LabelArtistState.label_id == label_id,
+            LabelArtistState.artist_id == data.artist_id,
+        )
+    )
+    state = stage_result.scalar_one_or_none()
+    if not state:
+        state = await _upsert_stage(db, label_id, data.artist_id, "review")
+    stage = state.stage
+
+    return WatchlistItemResponse(
+        artist_id=artist.id,
+        artist_name=artist.name,
+        image_url=artist.image_url,
+        stage=stage,
+        added_at=item.created_at,
+        notes=item.notes,
+    )
+
+
+@router.delete("/labels/{label_id}/watchlists/{watchlist_id}/items/{artist_id}")
+async def remove_watchlist_item(
+    label_id: str,
+    watchlist_id: str,
+    artist_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    watchlist = await db.get(Watchlist, watchlist_id)
+    if not watchlist or watchlist.label_id != label_id:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+    result = await db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.watchlist_id == watchlist_id,
+            WatchlistItem.artist_id == artist_id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    await db.delete(item)
+    await db.flush()
+    return {"status": "ok"}
+
+
+@router.get("/labels/{label_id}/alerts", response_model=list[AlertResponse])
+async def list_alerts(
+    label_id: str,
+    status: str | None = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    label = await db.get(Label, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    limit = max(1, min(limit, 200))
+    query = select(Alert, Artist.name).join(Artist).where(Alert.label_id == label_id)
+    if status:
+        query = query.where(Alert.status == status)
+    query = query.order_by(Alert.created_at.desc()).limit(limit)
+    result = await db.execute(query)
+    alerts = []
+    for alert, artist_name in result.all():
+        alerts.append(AlertResponse(
+            id=alert.id,
+            label_id=alert.label_id,
+            artist_id=alert.artist_id,
+            artist_name=artist_name,
+            rule_id=alert.rule_id,
+            severity=alert.severity,
+            status=alert.status,
+            title=alert.title,
+            description=alert.description,
+            created_at=alert.created_at,
+            context=alert.context,
+        ))
+    return alerts
+
+
+@router.post("/labels/{label_id}/alerts/{alert_id}/status")
+async def update_alert_status(
+    label_id: str,
+    alert_id: str,
+    data: AlertStatusInput,
+    db: AsyncSession = Depends(get_db),
+):
+    alert = await db.get(Alert, alert_id)
+    if not alert or alert.label_id != label_id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    alert.status = data.status
+    await db.flush()
+    return {"status": "ok", "alert_id": alert.id, "alert_status": alert.status}
 
 
 @router.post("/labels/{label_id}/llm/refresh")

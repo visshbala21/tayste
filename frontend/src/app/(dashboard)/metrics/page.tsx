@@ -65,6 +65,15 @@ export default function MetricsPage() {
             snapshots and are meant to indicate near-term trajectory.
           </p>
         </div>
+
+        <div className="bg-surface border border-border rounded-lg p-6">
+          <h2 className="text-lg font-semibold mb-2">Volatility &amp; Spikes</h2>
+          <p className="text-muted text-sm">
+            Volatility measures how uneven daily growth is over the last 30 days.
+            Sustained Growth shows how consistently the artist is growing day-to-day.
+            Spike Ratio highlights whether a single surge dominates the 30-day trend.
+          </p>
+        </div>
       </div>
     </div>
   );

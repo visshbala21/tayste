@@ -129,6 +129,7 @@ class ArtistFeatureResponse(BaseModel):
     momentum_score: Optional[float]
     risk_score: Optional[float]
     risk_flags: Optional[list]
+    extra: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -153,6 +154,7 @@ class ArtistDetailResponse(ArtistResponse):
     latest_features: Optional[ArtistFeatureResponse] = None
     llm_brief: Optional[dict] = None
     feedback_history: Optional[list] = []
+    label_stage: Optional[str] = None
 
 
 # --- Scout Feed ---
@@ -169,6 +171,9 @@ class ScoutFeedItem(BaseModel):
     growth_7d: Optional[float]
     growth_30d: Optional[float]
     genre_tags: Optional[list]
+    score_breakdown: Optional[dict] = None
+    reasons: Optional[List[str]] = None
+    stage: Optional[str] = None
 
 
 class ScoutFeedResponse(BaseModel):
@@ -185,6 +190,7 @@ class ClusterInfo(BaseModel):
     cluster_index: int
     cluster_name: Optional[str]
     artist_ids: list
+    artist_names: Optional[List[str]] = None
     centroid: Optional[list] = None
 
 
@@ -215,6 +221,73 @@ class FeedbackResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Watchlists ---
+
+class WatchlistCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class WatchlistResponse(BaseModel):
+    id: str
+    label_id: str
+    name: str
+    description: Optional[str]
+    is_active: bool
+    item_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WatchlistItemInput(BaseModel):
+    artist_id: str
+    notes: Optional[str] = None
+
+
+class WatchlistItemResponse(BaseModel):
+    artist_id: str
+    artist_name: str
+    image_url: Optional[str]
+    stage: Optional[str]
+    added_at: datetime
+    notes: Optional[str] = None
+
+
+class WatchlistDetailResponse(BaseModel):
+    watchlist: WatchlistResponse
+    items: List[WatchlistItemResponse]
+
+
+# --- Alerts ---
+
+class AlertStatusInput(BaseModel):
+    status: str = Field(..., pattern="^(new|seen|dismissed)$")
+
+
+class AlertResponse(BaseModel):
+    id: str
+    label_id: str
+    artist_id: str
+    artist_name: str
+    rule_id: Optional[str]
+    severity: str
+    status: str
+    title: str
+    description: Optional[str]
+    created_at: datetime
+    context: Optional[dict] = None
+
+
+# --- Workflow ---
+
+class StageUpdateInput(BaseModel):
+    stage: str = Field(..., pattern="^(new|review|shortlist|sign|pass|archive)$")
+    notes: Optional[str] = None
 
 
 # --- LLM ---

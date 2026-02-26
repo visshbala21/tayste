@@ -21,12 +21,15 @@ export function ScoutFeedClient({
   items,
   labelId,
   pipelineStatus,
+  defaultWatchlistId,
 }: {
   items: ScoutFeedItem[];
   labelId: string;
   pipelineStatus?: string;
+  defaultWatchlistId?: string;
 }) {
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
+  const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set());
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {
@@ -39,6 +42,21 @@ export function ScoutFeedClient({
       setFeedbackSent((prev) => new Set(prev).add(artistId));
     } catch (e) {
       console.error("Feedback failed:", e);
+    }
+  };
+
+  const addToWatchlist = async (artistId: string) => {
+    if (!defaultWatchlistId) return;
+    try {
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+      await fetch(`${API_BASE}/api/labels/${labelId}/watchlists/${defaultWatchlistId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist_id: artistId }),
+      });
+      setWatchlistAdded((prev) => new Set(prev).add(artistId));
+    } catch (e) {
+      console.error("Watchlist add failed:", e);
     }
   };
 
@@ -95,6 +113,11 @@ export function ScoutFeedClient({
                 <span className={`text-sm font-mono font-bold ${scoreColor(item.final_score)}`}>
                   {(item.final_score * 100).toFixed(0)}
                 </span>
+                {item.stage && (
+                  <span className="text-xs bg-surface-light text-muted px-2 py-0.5 rounded">
+                    {item.stage}
+                  </span>
+                )}
               </div>
 
               {item.genre_tags && (
@@ -110,6 +133,19 @@ export function ScoutFeedClient({
                 <ScoreBar label="Mom." value={item.momentum_score} color="bg-accent" />
                 <ScoreBar label="Risk" value={item.risk_score} color="bg-danger" />
               </div>
+
+              {item.reasons && item.reasons.length > 0 && (
+                <div className="flex flex-wrap gap-2 text-xs text-muted mb-2">
+                  {item.reasons.map((reason) => (
+                    <span
+                      key={`${item.artist_id}-${reason}`}
+                      className="bg-surface-light px-2 py-0.5 rounded text-gray-400"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center gap-4 text-xs text-muted">
                 {item.growth_7d != null && (
@@ -142,6 +178,16 @@ export function ScoutFeedClient({
                     Pass
                   </button>
                 </>
+              )}
+              {defaultWatchlistId && (
+                watchlistAdded.has(item.artist_id) ? (
+                  <span className="text-xs text-accent px-3 py-1">Watching</span>
+                ) : (
+                  <button onClick={() => addToWatchlist(item.artist_id)}
+                    className="text-xs bg-accent/10 text-accent px-3 py-1 rounded hover:bg-accent/20 transition-all duration-200">
+                    Watch
+                  </button>
+                )
               )}
             </div>
           </div>

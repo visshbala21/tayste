@@ -14,10 +14,12 @@ export default async function ScoutFeedPage({
   const { id } = await params;
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const limit = Math.max(1, Math.min(parseInt(resolvedSearch?.limit || "50", 10) || 50, 200));
-  const [feed, label] = await Promise.all([
+  const [feed, label, watchlists] = await Promise.all([
     api.getScoutFeed(id, limit),
     api.getLabel(id),
+    api.getWatchlists(id),
   ]);
+  const defaultWatchlistId = watchlists[0]?.id;
 
   return (
     <div>
@@ -44,6 +46,9 @@ export default async function ScoutFeedPage({
             <Link href={`/labels/${id}/taste-map`} className="text-sm bg-accent/10 text-accent px-3 py-1.5 rounded-lg hover:bg-accent/20 transition-all duration-200">
               Taste Map
             </Link>
+            <Link href={`/labels/${id}/watchlists`} className="text-sm bg-surface-light text-muted px-3 py-1.5 rounded-lg hover:text-gray-200 transition-all duration-200">
+              Watchlists
+            </Link>
             <Link href="/dashboard" className="text-sm bg-surface-light text-muted px-3 py-1.5 rounded-lg hover:text-gray-200 transition-all duration-200">
               All Labels
             </Link>
@@ -63,7 +68,12 @@ export default async function ScoutFeedPage({
         </div>
       </div>
 
-      <ScoutFeedClient items={feed.items} labelId={id} pipelineStatus={label.pipeline_status} />
+      <ScoutFeedClient
+        items={feed.items}
+        labelId={id}
+        pipelineStatus={label.pipeline_status}
+        defaultWatchlistId={defaultWatchlistId}
+      />
     </div>
   );
 }

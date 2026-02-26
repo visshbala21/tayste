@@ -7,6 +7,7 @@ from app.models.tables import Label, RosterMembership
 from app.ranking.features import compute_all_candidate_features, compute_artist_features
 from app.ranking.engine import rank_candidates
 from app.services.embeddings import cluster_label_artists, ensure_fallback_embeddings
+from app.services.alerts import generate_alerts_for_label
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,12 @@ async def run():
                 logger.info(f"Ranking candidates for label {lid}")
                 recs = await rank_candidates(db, lid)
                 logger.info(f"Generated {len(recs)} recommendations for label {lid}")
+                try:
+                    created = await generate_alerts_for_label(db, lid, recs)
+                    if created:
+                        logger.info(f"Generated {created} alerts for label {lid}")
+                except Exception as e:
+                    logger.error(f"Alert generation failed for label {lid}: {e}")
             except Exception as e:
                 logger.error(f"Scoring failed for label {lid}: {e}")
 

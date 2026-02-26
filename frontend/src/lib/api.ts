@@ -54,6 +54,8 @@ export interface ScoutFeedItem {
   growth_7d?: number;
   growth_30d?: number;
   genre_tags?: string[];
+  score_breakdown?: Record<string, unknown>;
+  reasons?: string[];
 }
 
 export interface ScoutFeed {
@@ -68,6 +70,7 @@ export interface ClusterInfo {
   cluster_index: number;
   cluster_name?: string;
   artist_ids: string[];
+  artist_names?: string[];
 }
 
 export interface TasteMap {
@@ -96,6 +99,7 @@ export interface ArtistFeatures {
   momentum_score?: number;
   risk_score?: number;
   risk_flags?: string[];
+  extra?: Record<string, unknown>;
 }
 
 export interface ArtistDetail {
@@ -116,6 +120,7 @@ export interface ArtistDetail {
     next_actions: string[];
   };
   feedback_history?: { action: string; notes?: string; created_at: string }[];
+  label_stage?: string;
 }
 
 export interface RosterImportPayload {
@@ -179,15 +184,57 @@ export interface RosterImportResult {
   warnings: string[];
 }
 
+export interface Watchlist {
+  id: string;
+  label_id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WatchlistItem {
+  artist_id: string;
+  artist_name: string;
+  image_url?: string;
+  stage?: string;
+  added_at: string;
+  notes?: string;
+}
+
+export interface WatchlistDetail {
+  watchlist: Watchlist;
+  items: WatchlistItem[];
+}
+
+export interface AlertItem {
+  id: string;
+  label_id: string;
+  artist_id: string;
+  artist_name: string;
+  rule_id?: string;
+  severity: string;
+  status: string;
+  title: string;
+  description?: string;
+  created_at: string;
+  context?: Record<string, unknown>;
+}
+
 export const api = {
   getLabels: () => fetchAPI<Label[]>("/labels"),
   getLabel: (id: string) => fetchAPI<Label>(`/labels/${id}`),
   getTasteMap: (id: string) => fetchAPI<TasteMap>(`/labels/${id}/taste-map`),
   getScoutFeed: (id: string, limit: number = 50) =>
     fetchAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`),
-  getArtist: (id: string) => fetchAPI<ArtistDetail>(`/artists/${id}`),
+  getArtist: (id: string, labelId?: string) =>
+    fetchAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`),
   submitFeedback: (labelId: string, data: { artist_id: string; action: string; notes?: string }) =>
     fetchAPI(`/labels/${labelId}/feedback`, { method: "POST", body: JSON.stringify(data) }),
+  updateArtistStage: (labelId: string, artistId: string, data: { stage: string; notes?: string }) =>
+    fetchAPI(`/labels/${labelId}/artists/${artistId}/stage`, { method: "POST", body: JSON.stringify(data) }),
   refreshLabelLLM: (id: string) =>
     fetchAPI(`/labels/${id}/llm/refresh`, { method: "POST" }),
   refreshArtistLLM: (id: string) =>
@@ -217,5 +264,25 @@ export const api = {
     fetchAPI<RosterImportResult>("/labels/import-confirm", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  getWatchlists: (labelId: string) =>
+    fetchAPI<Watchlist[]>(`/labels/${labelId}/watchlists`),
+  createWatchlist: (labelId: string, data: { name: string; description?: string }) =>
+    fetchAPI<Watchlist>(`/labels/${labelId}/watchlists`, { method: "POST", body: JSON.stringify(data) }),
+  getWatchlist: (labelId: string, watchlistId: string) =>
+    fetchAPI<WatchlistDetail>(`/labels/${labelId}/watchlists/${watchlistId}`),
+  addToWatchlist: (labelId: string, watchlistId: string, data: { artist_id: string; notes?: string }) =>
+    fetchAPI<WatchlistItem>(`/labels/${labelId}/watchlists/${watchlistId}/items`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  removeFromWatchlist: (labelId: string, watchlistId: string, artistId: string) =>
+    fetchAPI(`/labels/${labelId}/watchlists/${watchlistId}/items/${artistId}`, { method: "DELETE" }),
+  getAlerts: (labelId: string, status?: string, limit: number = 50) =>
+    fetchAPI<AlertItem[]>(`/labels/${labelId}/alerts?limit=${limit}${status ? `&status=${status}` : ""}`),
+  updateAlertStatus: (labelId: string, alertId: string, status: string) =>
+    fetchAPI(`/labels/${labelId}/alerts/${alertId}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
     }),
 };

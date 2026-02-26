@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { formatNumber, formatPercent, scoreColor } from "@/lib/utils";
 import { ArtistCharts } from "./charts";
 import { ArtistFeedback } from "./feedback";
+import { ArtistWatchlistButton } from "./watchlist";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,17 @@ export default async function ArtistDetailPage({
   const { id } = await params;
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const labelId = resolvedSearch?.label;
-  const artist = await api.getArtist(id);
+  const artist = await api.getArtist(id, labelId);
+  const trendExtra = artist.latest_features?.extra as Record<string, unknown> | undefined;
+  const volatility = typeof trendExtra?.volatility_30d === "number"
+    ? (trendExtra.volatility_30d as number)
+    : undefined;
+  const sustainedRatio = typeof trendExtra?.sustained_ratio_30d === "number"
+    ? (trendExtra.sustained_ratio_30d as number)
+    : undefined;
+  const spikeRatio = typeof trendExtra?.spike_ratio_30d === "number"
+    ? (trendExtra.spike_ratio_30d as number)
+    : undefined;
 
   return (
     <div>
@@ -44,6 +55,11 @@ export default async function ArtistDetailPage({
               <h1 className="text-2xl font-bold">{artist.name}</h1>
               {artist.is_candidate && (
                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">Candidate</span>
+              )}
+              {artist.label_stage && (
+                <span className="text-xs bg-surface-light text-muted px-2 py-0.5 rounded">
+                  {artist.label_stage}
+                </span>
               )}
             </div>
             {artist.bio && <p className="text-muted text-sm mb-2">{artist.bio}</p>}
@@ -74,6 +90,9 @@ export default async function ArtistDetailPage({
               </Link>
             )}
             {labelId && (
+              <ArtistWatchlistButton labelId={labelId} artistId={artist.id} />
+            )}
+            {labelId && (
               <Link href={`/labels/${labelId}/taste-map`}
                 className="text-xs bg-accent/10 text-accent px-3 py-1.5 rounded-lg hover:bg-accent/20 transition-all duration-200">
                 Taste Map
@@ -98,6 +117,35 @@ export default async function ArtistDetailPage({
             color={(artist.latest_features.growth_30d || 0) > 0 ? "text-success" : "text-danger"} />
           <MetricCard label="Risk" value={formatPercent(artist.latest_features.risk_score || 0)}
             color={scoreColor(1 - (artist.latest_features.risk_score || 0))} />
+        </div>
+      )}
+
+      {(volatility != null || sustainedRatio != null || spikeRatio != null) && (
+        <div className="bg-surface border border-border rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Trend Quality (30d)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {volatility != null && (
+              <MetricCard
+                label="Volatility"
+                value={formatPercent(volatility)}
+                color={scoreColor(1 - Math.min(volatility / 0.3, 1))}
+              />
+            )}
+            {sustainedRatio != null && (
+              <MetricCard
+                label="Sustained Growth"
+                value={formatPercent(sustainedRatio)}
+                color={scoreColor(Math.min(sustainedRatio, 1))}
+              />
+            )}
+            {spikeRatio != null && (
+              <MetricCard
+                label="Spike Ratio"
+                value={`${spikeRatio.toFixed(1)}x`}
+                color={scoreColor(1 - Math.min(spikeRatio / 5, 1))}
+              />
+            )}
+          </div>
         </div>
       )}
 

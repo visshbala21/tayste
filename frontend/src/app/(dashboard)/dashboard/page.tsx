@@ -90,6 +90,12 @@ export default async function DashboardPage() {
                     Taste Map
                   </Link>
                   <Link
+                    href={`/labels/${label.id}/watchlists`}
+                    className="text-sm text-muted hover:text-gray-200 transition px-3 py-1.5 rounded bg-surface-light"
+                  >
+                    Watchlists
+                  </Link>
+                  <Link
                     href={`/labels/${label.id}/scout-feed`}
                     className="text-sm text-primary hover:text-primary-light transition px-3 py-1.5 rounded bg-primary/10"
                   >

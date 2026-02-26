@@ -7,6 +7,37 @@ from app.models.tables import Snapshot, ArtistFeature, Artist
 from app.models.base import new_uuid
 
 
+def _compute_daily_growth_rates(
+    snapshots: list[Snapshot],
+    field: str,
+    window_days: int = 30,
+) -> list[float]:
+    if not snapshots:
+        return []
+    cutoff = datetime.utcnow() - timedelta(days=window_days)
+    series = [
+        (s.captured_at, getattr(s, field))
+        for s in snapshots
+        if s.captured_at and s.captured_at >= cutoff and getattr(s, field) is not None
+    ]
+    if len(series) < 2:
+        return []
+    rates: list[float] = []
+    prev_time, prev_val = series[0]
+    for current_time, current_val in series[1:]:
+        if prev_val is None or prev_val <= 0 or current_val is None:
+            prev_time, prev_val = current_time, current_val
+            continue
+        days = (current_time - prev_time).total_seconds() / 86400
+        if days <= 0:
+            prev_time, prev_val = current_time, current_val
+            continue
+        rate = (current_val - prev_val) / prev_val / days
+        rates.append(rate)
+        prev_time, prev_val = current_time, current_val
+    return rates
+
+
 async def compute_artist_features(db: AsyncSession, artist_id: str) -> Optional[ArtistFeature]:
     """Compute features for an artist from their snapshots."""
     # Get snapshots ordered by time
@@ -62,6 +93,25 @@ async def compute_artist_features(db: AsyncSession, artist_id: str) -> Optional[
         risk_score += 0.2
     risk_score = min(risk_score, 1.0)
 
+    # Volatility + sustained vs spike (30d)
+    rates = _compute_daily_growth_rates(snapshots, "followers", window_days=30)
+    if len(rates) < 3:
+        rates = _compute_daily_growth_rates(snapshots, "views", window_days=30)
+
+    volatility_30d = float(np.std(rates)) if rates else None
+    sustained_ratio_30d = None
+    spike_ratio_30d = None
+    if rates:
+        sustained_ratio_30d = float(sum(1 for r in rates if r > 0) / len(rates))
+        median_rate = float(np.median(rates))
+        spike_ratio_30d = float(max(rates) / (abs(median_rate) + 1e-6))
+        spike_ratio_30d = min(spike_ratio_30d, 50.0)
+
+    if volatility_30d is not None and volatility_30d > 0.15:
+        risk_flags.append("high_volatility_30d")
+    if spike_ratio_30d is not None and spike_ratio_30d > 4.0:
+        risk_flags.append("spiky_growth_30d")
+
     # Momentum: weighted combination
     momentum_score = (
         0.3 * min(growth_7d, 2.0) / 2.0 +
@@ -71,12 +121,21 @@ async def compute_artist_features(db: AsyncSession, artist_id: str) -> Optional[
     )
     momentum_score = max(0.0, min(1.0, momentum_score))
 
+    extra_metrics = {}
+    if volatility_30d is not None:
+        extra_metrics["volatility_30d"] = round(volatility_30d, 4)
+    if sustained_ratio_30d is not None:
+        extra_metrics["sustained_ratio_30d"] = round(sustained_ratio_30d, 4)
+    if spike_ratio_30d is not None:
+        extra_metrics["spike_ratio_30d"] = round(spike_ratio_30d, 4)
+
     feature = ArtistFeature(
         id=new_uuid(), artist_id=artist_id, computed_at=now,
         growth_7d=growth_7d, growth_30d=growth_30d,
         acceleration=acceleration, engagement_rate=engagement_rate,
         momentum_score=momentum_score, risk_score=risk_score,
         risk_flags=risk_flags,
+        extra=extra_metrics or None,
     )
     db.add(feature)
     await db.flush()
