@@ -16,7 +16,7 @@ from app.services.embeddings import build_metric_vector, store_embedding
 
 logger = logging.getLogger(__name__)
 
-SC_PLATFORMS = ["spotify", "youtube", "tiktok", "instagram"]
+SC_PLATFORMS = ["spotify", "youtube"]
 
 
 def _is_hot(artist_id: str, features_map: dict, days_since_discovery: int) -> bool:

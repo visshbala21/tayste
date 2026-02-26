@@ -32,12 +32,15 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
         logger.info(f"No roster artists with Soundcharts accounts for {label_name}")
         return 0
 
+    max_candidates = 50
     discovered = 0
     seen_uuids: set[str] = set()
 
     for sc_uuid, _roster_artist_id in roster_sc:
+        if discovered >= max_candidates:
+            break
         try:
-            related = await sc.get_related_artists(sc_uuid, limit=40)
+            related = await sc.get_related_artists(sc_uuid, limit=20)
         except Exception as e:
             logger.warning(f"SC related artists failed for {sc_uuid}: {e}")
             continue
@@ -46,6 +49,8 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
             continue
 
         for artist_data in related:
+            if discovered >= max_candidates:
+                break
             rel_uuid = artist_data.get("sc_uuid", "")
             name = artist_data.get("name", "")
             if not rel_uuid or not name:
