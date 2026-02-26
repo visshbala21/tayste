@@ -56,6 +56,7 @@ export interface ScoutFeedItem {
   genre_tags?: string[];
   score_breakdown?: Record<string, unknown>;
   reasons?: string[];
+  stage?: string;
 }
 
 export interface ScoutFeed {
