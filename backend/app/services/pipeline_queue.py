@@ -24,7 +24,8 @@ class PipelineQueue:
         self._current_label_id: str | None = None
         self._lock = asyncio.Lock()
 
-    def start(self):
+    async def start(self):
+        await self._reconcile_stale_statuses()
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._worker())
 
@@ -133,13 +134,28 @@ class PipelineQueue:
             values = {"pipeline_status": status}
             if status == "queued":
                 values["pipeline_started_at"] = None
-                values["pipeline_completed_at"] = None
             if started_at is not None:
                 values["pipeline_started_at"] = started_at
             if completed_at is not None:
                 values["pipeline_completed_at"] = completed_at
             await db.execute(
                 update(Label).where(Label.id == label_id).values(**values)
+            )
+            await db.commit()
+
+    async def _reconcile_stale_statuses(self):
+        """Reset stale statuses after a restart since the in-memory queue is lost."""
+        async with async_session_factory() as db:
+            now = datetime.utcnow()
+            await db.execute(
+                update(Label)
+                .where(Label.pipeline_status == "queued")
+                .values(pipeline_status="idle", pipeline_started_at=None)
+            )
+            await db.execute(
+                update(Label)
+                .where(Label.pipeline_status == "running")
+                .values(pipeline_status="error", pipeline_completed_at=now)
             )
             await db.commit()
 

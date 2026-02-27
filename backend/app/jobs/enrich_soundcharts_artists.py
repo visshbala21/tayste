@@ -110,6 +110,7 @@ async def enrich_artist(
             followers = day_data.get("followerCount") or day_data.get("value")
             views = None
             extra = {}
+            engagement_rate = None
 
             # Merge streaming data if available for this date
             stream_data = streaming_by_date.get(date_str[:10])
@@ -130,6 +131,16 @@ async def enrich_artist(
             view_count = day_data.get("viewCount")
             if view_count is not None:
                 extra["view_count"] = view_count
+            if like_count is not None and view_count:
+                try:
+                    engagement_rate = float(like_count) / float(view_count)
+                except Exception:
+                    engagement_rate = None
+            elif like_count is not None and views:
+                try:
+                    engagement_rate = float(like_count) / float(views)
+                except Exception:
+                    engagement_rate = None
 
             snapshot = Snapshot(
                 id=new_uuid(),
@@ -138,6 +149,7 @@ async def enrich_artist(
                 captured_at=captured,
                 followers=int(followers) if followers is not None else None,
                 views=int(views) if views is not None else None,
+                engagement_rate=engagement_rate,
                 extra_metrics=extra if extra else None,
             )
             db.add(snapshot)
