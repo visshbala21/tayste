@@ -266,6 +266,29 @@ async def _upsert_roster_entries(
         else:
             warnings.append(f"Missing platform ID for '{name}'; added as roster without connector account")
 
+        # Create additional platform accounts (e.g. youtube_id, spotify_url)
+        for extra in (entry.additional_platforms or []):
+            extra_pid = extra.platform_id
+            extra_url = extra.platform_url
+            if extra_url and not extra_pid:
+                extra_pid = extract_platform_id(extra.platform, extra_url) or extra_pid
+            if extra_pid:
+                result = await db.execute(
+                    select(PlatformAccount).where(
+                        PlatformAccount.artist_id == artist.id,
+                        PlatformAccount.platform == extra.platform,
+                        PlatformAccount.platform_id == extra_pid,
+                    )
+                )
+                if not result.scalar_one_or_none():
+                    db.add(PlatformAccount(
+                        id=new_uuid(),
+                        artist_id=artist.id,
+                        platform=extra.platform,
+                        platform_id=extra_pid,
+                        platform_url=extra_url,
+                    ))
+
         # Create roster membership if missing
         existing = await db.execute(
             select(RosterMembership).where(

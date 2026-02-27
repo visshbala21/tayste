@@ -7,12 +7,19 @@ import Link from "next/link";
 
 type Status = "idle" | "loading" | "success" | "error";
 
+type AdditionalPlatform = {
+  platform: string;
+  platform_id?: string;
+  platform_url?: string;
+};
+
 type EditableEntry = {
   name: string;
   platform?: string;
   platform_id?: string;
   platform_url?: string;
   genre_tags?: string[];
+  additional_platforms?: AdditionalPlatform[];
   include: boolean;
   genre_input: string;
 };
@@ -120,6 +127,7 @@ export function ImportRosterClient() {
             .split(",")
             .map((g) => g.trim())
             .filter(Boolean),
+          additional_platforms: e.additional_platforms || undefined,
         }));
 
       const res = await api.importRosterConfirm({
@@ -337,6 +345,15 @@ export function ImportRosterClient() {
                     }}
                     placeholder="platform_url"
                   />
+                  {entry.additional_platforms && entry.additional_platforms.length > 0 && (
+                    entry.additional_platforms.map((ap, apIdx) => (
+                      <div key={apIdx} className="md:col-span-2 flex items-center gap-2 text-xs text-muted bg-surface/50 border border-border/50 rounded px-2 py-1.5">
+                        <span className="text-primary-light font-medium">{ap.platform}</span>
+                        {ap.platform_id && <span className="truncate">{ap.platform_id}</span>}
+                        {ap.platform_url && <span className="truncate opacity-70">{ap.platform_url}</span>}
+                      </div>
+                    ))
+                  )}
                   <input
                     className="bg-surface border border-border rounded px-2 py-1 md:col-span-2"
                     value={entry.genre_input}

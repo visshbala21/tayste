@@ -4,7 +4,7 @@ import re
 from typing import List
 from urllib.parse import urlparse
 
-from app.api.schemas import RosterParseOutput, RosterParsedArtist
+from app.api.schemas import RosterParseOutput, RosterParsedArtist, PlatformEntry
 from app.llm.client import llm_client
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ Rules:
 URL_RE = re.compile(r"(https?://[^\s\)\]]+)")
 YOUTUBE_CHANNEL_RE = re.compile(r"youtube\.com/channel/(UC[a-zA-Z0-9_-]{20,})", re.IGNORECASE)
 NULL_LIKE = {"none", "null", "n/a", "na", "", "unknown"}
+KNOWN_PLATFORMS = {"youtube", "spotify", "tiktok", "soundcharts", "instagram", "bandcamp"}
 
 
 def _detect_platform(url: str, default_platform: str) -> str:
@@ -75,6 +76,27 @@ def _normalize_value(value):
     return value
 
 
+def _extract_additional_platforms(entry: dict, primary_platform: str | None) -> list[PlatformEntry]:
+    """Extract additional platform accounts from keys like youtube_id, spotify_url, etc."""
+    found: dict[str, dict] = {}
+    for key, value in entry.items():
+        if not value or not isinstance(value, str):
+            continue
+        value = value.strip()
+        if not value or value.lower() in NULL_LIKE:
+            continue
+        key_lower = key.lower()
+        for plat in KNOWN_PLATFORMS:
+            if key_lower in (f"{plat}_id", f"{plat}_platform_id"):
+                found.setdefault(plat, {"platform": plat})["platform_id"] = value
+            elif key_lower in (f"{plat}_url", f"{plat}_platform_url"):
+                found.setdefault(plat, {"platform": plat})["platform_url"] = value
+    # Remove the primary platform — it's already in the main fields
+    if primary_platform:
+        found.pop(primary_platform.lower(), None)
+    return [PlatformEntry(**v) for v in found.values()] if found else []
+
+
 def _parse_json_roster(raw_text: str) -> RosterParseOutput | None:
     try:
         obj = json.loads(raw_text)
@@ -98,12 +120,16 @@ def _parse_json_roster(raw_text: str) -> RosterParseOutput | None:
         else:
             genres = None
 
+        platform_str = str(platform).lower() if platform else None
+        additional = _extract_additional_platforms(entry, platform_str)
+
         artists.append(RosterParsedArtist(
             name=str(name),
-            platform=str(platform).lower() if platform else None,
+            platform=platform_str,
             platform_id=str(platform_id) if platform_id else None,
             platform_url=str(platform_url) if platform_url else None,
             genre_tags=genres,
+            additional_platforms=additional or None,
         ))
 
     if isinstance(obj, dict):

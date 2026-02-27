@@ -42,12 +42,19 @@ class RosterInput(BaseModel):
 
 # --- Roster Import ---
 
+class PlatformEntry(BaseModel):
+    platform: str
+    platform_id: Optional[str] = None
+    platform_url: Optional[str] = None
+
+
 class RosterParsedArtist(BaseModel):
     name: str
     platform: Optional[str] = None
     platform_id: Optional[str] = None
     platform_url: Optional[str] = None
     genre_tags: Optional[list] = None
+    additional_platforms: Optional[List[PlatformEntry]] = None
 
 
 class RosterParseOutput(BaseModel):

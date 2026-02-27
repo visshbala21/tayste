@@ -162,6 +162,7 @@ export interface RosterConfirmPayload {
     platform_id?: string;
     platform_url?: string;
     genre_tags?: string[];
+    additional_platforms?: { platform: string; platform_id?: string; platform_url?: string }[];
   }[];
   default_platform?: string;
   run_pipeline?: boolean;
@@ -179,6 +180,7 @@ export interface RosterImportResult {
     platform_id?: string;
     platform_url?: string;
     genre_tags?: string[];
+    additional_platforms?: { platform: string; platform_id?: string; platform_url?: string }[];
   }[];
   created: { artist_id: string; name: string; platform: string; platform_id?: string }[];
   skipped: { name: string; reason: string }[];
