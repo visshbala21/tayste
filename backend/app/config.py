@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     # Embedding dimensions
     embedding_dim: int = 128
 
+    # Emerging artist defaults (quality gates)
+    emerging_max_spotify_followers: int = 100000
+    emerging_max_spotify_popularity: int = 35
+    emerging_max_followers: int = 250000
+    emerging_min_growth_7d: float = 0.10
+    emerging_min_growth_30d: float = 0.25
+    emerging_min_momentum: float = 0.45
+
     class Config:
         env_file = ".env"
         extra = "ignore"

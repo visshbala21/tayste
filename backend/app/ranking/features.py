@@ -122,6 +122,17 @@ async def compute_artist_features(db: AsyncSession, artist_id: str) -> Optional[
     momentum_score = max(0.0, min(1.0, momentum_score))
 
     extra_metrics = {}
+    follower_values = [s.followers for s in snapshots if s.followers is not None]
+    if follower_values:
+        extra_metrics["max_followers"] = int(max(follower_values))
+        extra_metrics["latest_followers"] = int(latest.followers) if latest.followers is not None else None
+    popularity_values = [
+        (s.extra_metrics or {}).get("popularity")
+        for s in snapshots
+        if (s.extra_metrics or {}).get("popularity") is not None
+    ]
+    if popularity_values:
+        extra_metrics["spotify_popularity"] = float(max(popularity_values))
     if volatility_30d is not None:
         extra_metrics["volatility_30d"] = round(volatility_30d, 4)
     if sustained_ratio_30d is not None:

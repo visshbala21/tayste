@@ -8,6 +8,29 @@ from app.models.tables import (
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
+from app.config import get_settings
+
+settings = get_settings()
+
+
+def _passes_emerging_filters(features: ArtistFeature | None) -> bool:
+    if not features:
+        return False
+    growth_7d = features.growth_7d or 0.0
+    growth_30d = features.growth_30d or 0.0
+    momentum = features.momentum_score or 0.0
+    max_followers = None
+    if features.extra:
+        max_followers = features.extra.get("max_followers")
+    if max_followers is not None and max_followers > settings.emerging_max_followers:
+        return False
+    if growth_7d >= settings.emerging_min_growth_7d:
+        return True
+    if growth_30d >= settings.emerging_min_growth_30d:
+        return True
+    if momentum >= settings.emerging_min_momentum:
+        return True
+    return False
 
 
 async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendation]:
@@ -89,6 +112,8 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             momentum = 0.5
             risk = 0.0
             fallback_metrics = True
+        if not _passes_emerging_filters(features):
+            continue
 
         # Find nearest roster artist
         nearest_roster_id = None

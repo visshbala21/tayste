@@ -18,6 +18,7 @@ from app.jobs.discover import is_likely_slop
 logger = logging.getLogger(__name__)
 
 MAX_CANDIDATES_PER_LABEL = 100
+ALLOWED_CAREER_STAGES = {"emerging", "developing"}
 
 
 async def _crossref_with_soundcharts(db, sc: SoundchartsConnector):
@@ -139,9 +140,12 @@ async def pull_for_label(db, label_id: str):
 
             name = artist_data.get("name", "")
             sc_uuid = artist_data.get("sc_uuid", "")
+            career_stage = (artist_data.get("career_stage") or "").lower()
             if not name or not sc_uuid:
                 continue
             if is_likely_slop(name):
+                continue
+            if career_stage and career_stage not in ALLOWED_CAREER_STAGES:
                 continue
 
             existing = await db.execute(

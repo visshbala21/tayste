@@ -12,8 +12,11 @@ from app.models.base import new_uuid
 from app.connectors.spotify import SpotifyConnector
 from app.connectors.soundcharts import SoundchartsConnector
 from app.jobs.discover import is_likely_slop
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+ALLOWED_CAREER_STAGES = {"emerging", "developing"}
+settings = get_settings()
 
 
 async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str, label_name: str) -> int:
@@ -61,6 +64,15 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
 
             if is_likely_slop(name):
                 continue
+
+            try:
+                profile = await sc.get_artist_profile(rel_uuid)
+            except Exception:
+                profile = None
+            if profile:
+                career_stage = (profile.get("career_stage") or "").lower()
+                if career_stage and career_stage not in ALLOWED_CAREER_STAGES:
+                    continue
 
             # Skip if SC UUID already exists
             existing = await db.execute(
@@ -176,6 +188,13 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
             seen_spotify_ids.add(sp_id)
 
             if is_likely_slop(name):
+                continue
+
+            followers = artist_data.get("followers") or 0
+            popularity = artist_data.get("popularity") or 0
+            if followers > settings.emerging_max_spotify_followers:
+                continue
+            if popularity > settings.emerging_max_spotify_popularity:
                 continue
 
             existing = await db.execute(

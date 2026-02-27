@@ -11,8 +11,10 @@ from app.connectors.spotify import SpotifyConnector
 from app.llm.label_dna import generate_label_dna
 from app.llm.query_expansion import expand_queries
 from app.api.schemas import LabelDNAOutput
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 BAD_NAME_PATTERNS = [
     r"\b(music for|music to|music with)\b",
@@ -161,6 +163,10 @@ async def discover_for_label(db, label_id: str):
                 # Require meaningful Spotify presence — real artists have
                 # followers and popularity; genre pages and compilations don't
                 if followers < 500 or popularity < 5:
+                    continue
+                if followers > settings.emerging_max_spotify_followers:
+                    continue
+                if popularity > settings.emerging_max_spotify_popularity:
                     continue
                 # No genres on Spotify usually means it's not a real artist
                 if not ch.get("genres"):
