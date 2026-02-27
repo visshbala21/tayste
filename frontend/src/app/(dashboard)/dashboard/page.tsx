@@ -28,8 +28,7 @@ export default async function DashboardPage() {
 
       {labels.length === 0 ? (
         <div className="bg-surface border border-border rounded-lg p-12 text-center">
-          <p className="text-muted mb-4">No labels yet. Run the demo pipeline to get started:</p>
-          <code className="bg-surface-light px-4 py-2 rounded text-primary font-mono text-sm">make demo</code>
+          <p className="text-muted">No labels yet. Import a roster to get started.</p>
         </div>
       ) : (
         <div className="grid gap-4">
