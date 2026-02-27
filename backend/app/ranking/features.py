@@ -112,12 +112,16 @@ async def compute_artist_features(db: AsyncSession, artist_id: str) -> Optional[
     if spike_ratio_30d is not None and spike_ratio_30d > 4.0:
         risk_flags.append("spiky_growth_30d")
 
-    # Momentum: weighted combination
+    # Momentum: weighted combination with realistic normalization ranges
+    # growth_7d: 20% weekly = top score (viral territory)
+    # growth_30d: 50% monthly = top score
+    # acceleration: 20% = top score
+    # engagement: 5% = top score (excellent organic engagement)
     momentum_score = (
-        0.3 * min(growth_7d, 2.0) / 2.0 +
-        0.3 * min(growth_30d, 5.0) / 5.0 +
-        0.2 * min(max(acceleration, 0), 1.0) +
-        0.2 * min(engagement_rate * 100, 1.0)
+        0.35 * min(max(growth_7d, 0) / 0.20, 1.0) +
+        0.25 * min(max(growth_30d, 0) / 0.50, 1.0) +
+        0.20 * min(max(acceleration, 0) / 0.20, 1.0) +
+        0.20 * min(engagement_rate / 0.05, 1.0)
     )
     momentum_score = max(0.0, min(1.0, momentum_score))
 

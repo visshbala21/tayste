@@ -17,17 +17,38 @@ EMBED_DIM = settings.embedding_dim
 
 def build_metric_vector(snapshots: list[dict]) -> Optional[np.ndarray]:
     """Build a 128-dim embedding from artist metric snapshots.
-    Uses latest snapshot values + computed growth features, padded to 128 dims."""
+    Uses log-transformed counts, ratio features, and growth features,
+    L2-normalized so cosine similarity is meaningful."""
     if not snapshots:
         return None
     latest = snapshots[-1]
+
+    followers = float(latest.get("followers") or 0)
+    views = float(latest.get("views") or 0)
+    likes = float(latest.get("likes") or 0)
+    comments = float(latest.get("comments") or 0)
+    engagement = float(latest.get("engagement_rate") or 0)
+
+    # Log-transform raw counts to prevent large values from dominating
     features = [
-        float(latest.get("followers") or 0),
-        float(latest.get("views") or 0),
-        float(latest.get("likes") or 0),
-        float(latest.get("comments") or 0),
-        float(latest.get("engagement_rate") or 0),
+        np.log1p(followers),
+        np.log1p(views),
+        np.log1p(likes),
+        np.log1p(comments),
+        engagement * 10,  # scale engagement to comparable magnitude
     ]
+
+    # Ratio features — capture artist profile shape independent of scale
+    if views > 0:
+        features.append(likes / views)
+        features.append(comments / views)
+    else:
+        features.extend([0.0, 0.0])
+    if followers > 0:
+        features.append(np.log1p(views / followers))
+    else:
+        features.append(0.0)
+
     # Growth features if we have history
     if len(snapshots) >= 2:
         prev = snapshots[0]
@@ -38,9 +59,13 @@ def build_metric_vector(snapshots: list[dict]) -> Optional[np.ndarray]:
             features.append(growth)
     else:
         features.extend([0.0, 0.0, 0.0])
-    # Pad to EMBED_DIM
+
+    # Pad to EMBED_DIM and L2-normalize
     vec = np.zeros(EMBED_DIM, dtype=np.float32)
     vec[:len(features)] = features
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec = vec / norm
     return vec
 
 
