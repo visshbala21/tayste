@@ -119,6 +119,32 @@ def _to_int(value) -> int | None:
         return None
 
 
+def _normalized_cosine(sim: float) -> float:
+    """Map cosine similarity [-1, 1] to [0, 1]."""
+    return max(0.0, min(1.0, (float(sim) + 1.0) / 2.0))
+
+
+def _passes_soft_backfill_gate(
+    features: ArtistFeature | None,
+    fit_score: float,
+    risk: float,
+    policy: RankingPolicy,
+) -> bool:
+    """Secondary gate when strict emerging evidence is sparse.
+
+    Still requires thematic fit and manageable risk, but allows artists with
+    weaker growth evidence as long as they are not mainstream.
+    """
+    if fit_score < 0.22:
+        return False
+    if risk > min(0.9, policy.max_risk + 0.15):
+        return False
+    if features:
+        return True
+    # If we have no features, only allow strong thematic matches.
+    return fit_score >= 0.38
+
+
 async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendation]:
     """Score and rank candidate artists for a label."""
     batch_id = new_uuid()
@@ -203,6 +229,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
     cluster_centroids = [(cluster.id, np.array(cluster.centroid)) for cluster in clusters]
     qualified_payloads: list[dict] = []
     fallback_payloads: list[dict] = []
+    soft_backfill_payloads: list[dict] = []
 
     for artist in candidates:
         if artist.id in globally_rostered_ids:
@@ -213,15 +240,30 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             continue
         artist_vec = np.array(emb.vector)
 
-        # Compute fit: max cosine similarity to any cluster centroid
-        fit_score = 0.0
+        # Compute fit from both centroid and nearest roster signals.
+        best_cluster_sim = -1.0
         nearest_cluster_id = None
         for cluster_id, centroid in cluster_centroids:
             sim = cosine_similarity(artist_vec, centroid)
-            if sim > fit_score:
-                fit_score = sim
+            if sim > best_cluster_sim:
+                best_cluster_sim = sim
                 nearest_cluster_id = cluster_id
-        fit_score = max(0.0, min(1.0, fit_score))
+
+        nearest_roster_id = None
+        best_roster_sim = -1.0
+        for rid, rvec in roster_embeddings.items():
+            sim = cosine_similarity(artist_vec, rvec)
+            if sim > best_roster_sim:
+                best_roster_sim = sim
+                nearest_roster_id = rid
+
+        fit_score = max(
+            _normalized_cosine(best_cluster_sim),
+            _normalized_cosine(best_roster_sim),
+        )
+        # Hard floor: avoid low/zero-theme matches in feed.
+        if fit_score < 0.12:
+            continue
 
         features = latest_features.get(artist.id)
         artist_platform_meta = platform_metadata.get(artist.id, {})
@@ -238,7 +280,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             or _to_int(feature_extra.get("spotify_popularity"))
         )
         total_followers = spotify_followers or _to_int(feature_extra.get("max_followers"))
-        emerging = evaluate_emerging_artist(
+        strict_emerging = evaluate_emerging_artist(
             EmergingSignals(
                 name=artist.name,
                 bio=artist.bio,
@@ -252,6 +294,28 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             ),
             strict=True,
         )
+        soft_emerging = strict_emerging
+        emerging_gate = "strict"
+        if not strict_emerging.is_emerging:
+            soft_emerging = evaluate_emerging_artist(
+                EmergingSignals(
+                    name=artist.name,
+                    bio=artist.bio,
+                    career_stage=soundcharts_meta.get("career_stage"),
+                    spotify_followers=spotify_followers,
+                    spotify_popularity=spotify_popularity,
+                    total_followers=total_followers,
+                    growth_7d=features.growth_7d if features else None,
+                    growth_30d=features.growth_30d if features else None,
+                    momentum_score=features.momentum_score if features else None,
+                ),
+                strict=False,
+            )
+            if not soft_emerging.is_emerging:
+                continue
+            emerging_gate = "soft"
+
+        emerging = strict_emerging if emerging_gate == "strict" else soft_emerging
         if not emerging.is_emerging:
             continue
 
@@ -266,15 +330,6 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         momentum = max(0.0, min(1.0, float(momentum or 0.0)))
         risk = max(0.0, min(1.0, float(risk or 0.0)))
         scale = _scale_score(features)
-
-        # Find nearest roster artist
-        nearest_roster_id = None
-        best_roster_sim = -1
-        for rid, rvec in roster_embeddings.items():
-            sim = cosine_similarity(artist_vec, rvec)
-            if sim > best_roster_sim:
-                best_roster_sim = sim
-                nearest_roster_id = rid
 
         weighted_sum = (
             fit_score * policy.fit_weight
@@ -306,7 +361,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
                     "risk": policy.risk_weight,
                 },
                 "formula": "((fit*w_fit + momentum*w_momentum + scale*w_scale)/sum_w) - risk*w_risk",
-                "emerging_gate": "pass",
+                "emerging_gate": emerging_gate,
                 "emerging_reasons": list(emerging.reasons),
             },
         }
@@ -314,13 +369,19 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             payload["score_breakdown"]["fallback"] = True
             payload["score_breakdown"]["note"] = "No recent features; using strict conservative defaults"
 
-        if _passes_quality_gate(features, policy):
+        if emerging_gate == "strict" and _passes_quality_gate(features, policy):
             qualified_payloads.append(payload)
-        else:
+        elif emerging_gate == "strict":
             fallback_payloads.append(payload)
+        elif _passes_soft_backfill_gate(features, fit_score, risk, policy):
+            payload["score_breakdown"]["note"] = (
+                "Soft emerging backfill: no hard mainstream signal and strong thematic fit"
+            )
+            soft_backfill_payloads.append(payload)
 
     qualified_payloads.sort(key=lambda p: p["final_score"], reverse=True)
     fallback_payloads.sort(key=lambda p: p["final_score"], reverse=True)
+    soft_backfill_payloads.sort(key=lambda p: p["final_score"], reverse=True)
 
     selected_payloads = list(qualified_payloads)
     if len(selected_payloads) < policy.min_results:
@@ -332,6 +393,14 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             selected_ids.add(payload["artist_id"])
             if len(selected_payloads) >= policy.min_results:
                 break
+        if len(selected_payloads) < policy.min_results:
+            for payload in soft_backfill_payloads:
+                if payload["artist_id"] in selected_ids:
+                    continue
+                selected_payloads.append(payload)
+                selected_ids.add(payload["artist_id"])
+                if len(selected_payloads) >= policy.min_results:
+                    break
 
     recommendations = []
     for payload in selected_payloads:
