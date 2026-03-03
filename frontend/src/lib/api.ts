@@ -54,13 +54,23 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-async function fetchCachedAPI<T>(path: string, options?: RequestInit): Promise<T> {
+async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidateSeconds: number = 30): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const res = await fetch(`${getApiBase()}/api${path}`, {
+  const fetchOptions: RequestInit = {
     ...options,
     headers: { "Content-Type": "application/json", ...authHeaders, ...options?.headers },
-    next: { revalidate: 30 },
-  } as RequestInit);
+  };
+  
+  // For server-side rendering, configure caching
+  if (typeof window === "undefined") {
+    if (revalidateSeconds === 0) {
+      (fetchOptions as any).cache = "no-store";
+    } else {
+      (fetchOptions as any).next = { revalidate: revalidateSeconds };
+    }
+  }
+  
+  const res = await fetch(`${getApiBase()}/api${path}`, fetchOptions);
   if (res.status === 401 && typeof window !== "undefined") {
     window.location.href = "/login";
     throw new Error("Unauthorized");
@@ -286,7 +296,7 @@ export interface AlertItem {
 }
 
 export const api = {
-  getLabels: () => fetchCachedAPI<Label[]>("/labels"),
+  getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 0), // No cache for labels to show new imports immediately
   getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`),
   getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`),
   getScoutFeed: (id: string, limit: number = 50) =>
