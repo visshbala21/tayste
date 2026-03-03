@@ -12,15 +12,20 @@ from app.models.base import new_uuid
 from app.connectors.spotify import SpotifyConnector
 from app.connectors.soundcharts import SoundchartsConnector
 from app.jobs.discover import is_likely_slop
-from app.config import get_settings
+from app.services.emerging import EmergingSignals, evaluate_emerging_artist
 
 logger = logging.getLogger(__name__)
 ALLOWED_CAREER_STAGES = {"emerging", "developing"}
 PROFILE_LOOKUP_CONCURRENCY = 10
-settings = get_settings()
 
 
-async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str, label_name: str) -> int:
+async def _discover_via_soundcharts(
+    db,
+    sc: SoundchartsConnector,
+    spotify: SpotifyConnector,
+    label_id: str,
+    label_name: str,
+) -> int:
     """Walk Soundcharts related-artists graph from roster artists with SC accounts."""
     result = await db.execute(
         select(PlatformAccount.platform_id, PlatformAccount.artist_id)
@@ -39,6 +44,7 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
     max_candidates = 50
     discovered = 0
     seen_uuids: set[str] = set()
+    spotify_stats_cache: dict[str, dict] = {}
 
     # --- Gather all related-artist calls in parallel ---
     async def _fetch_related(sc_uuid: str):
@@ -115,10 +121,41 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
         except Exception:
             ids = {}
 
+        spotify_id = ids.get("spotify")
+        spotify_stats = {}
+        spotify_followers = None
+        spotify_popularity = None
+        if spotify_id and spotify.available:
+            if spotify_id not in spotify_stats_cache:
+                try:
+                    fetched = await spotify.get_artist_stats_bulk([spotify_id])
+                except Exception:
+                    fetched = {}
+                spotify_stats_cache[spotify_id] = fetched.get(spotify_id) or {}
+            spotify_stats = spotify_stats_cache.get(spotify_id) or {}
+            spotify_followers = spotify_stats.get("followers")
+            spotify_popularity = spotify_stats.get("popularity")
+
+        emerging = evaluate_emerging_artist(
+            EmergingSignals(
+                name=name,
+                bio=(profile or {}).get("description"),
+                career_stage=(profile or {}).get("career_stage"),
+                spotify_followers=spotify_followers,
+                spotify_popularity=spotify_popularity,
+                total_followers=spotify_followers,
+            ),
+            strict=False,
+        )
+        if not emerging.is_emerging:
+            continue
+
         artist = Artist(
             id=new_uuid(),
             name=name,
+            bio=(profile or {}).get("description"),
             image_url=artist_data.get("image_url"),
+            genre_tags=(profile or {}).get("genres") or [],
             is_candidate=True,
         )
         db.add(artist)
@@ -129,10 +166,15 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
             id=new_uuid(), artist_id=artist.id, platform="soundcharts",
             platform_id=rel_uuid,
             platform_url=f"https://app.soundcharts.com/app/artist/{artist_data.get('slug') or rel_uuid}",
+            platform_metadata={
+                "career_stage": (profile or {}).get("career_stage"),
+                "growth_level": (profile or {}).get("growth_level"),
+                "genres": (profile or {}).get("genres") or [],
+                "emerging_reasons": list(emerging.reasons),
+            },
         ))
 
         # Spotify account from cross-platform IDs
-        spotify_id = ids.get("spotify")
         if spotify_id:
             sp_existing = await db.execute(
                 select(PlatformAccount).where(
@@ -145,6 +187,11 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
                     id=new_uuid(), artist_id=artist.id, platform="spotify",
                     platform_id=spotify_id,
                     platform_url=f"https://open.spotify.com/artist/{spotify_id}",
+                    platform_metadata={
+                        "followers": spotify_followers,
+                        "popularity": spotify_popularity,
+                        "genres": spotify_stats.get("genres") or [],
+                    },
                 ))
 
         # YouTube account from cross-platform IDs
@@ -217,9 +264,33 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
 
             followers = artist_data.get("followers") or 0
             popularity = artist_data.get("popularity") or 0
-            if followers > settings.emerging_max_spotify_followers:
-                continue
-            if popularity > settings.emerging_max_spotify_popularity:
+            sc_uuid = None
+            sc_slug = None
+            sc_profile = None
+            if sc.available:
+                try:
+                    sc_artist = await sc.get_artist_by_platform_id("spotify", sp_id)
+                    if sc_artist and sc_artist.get("sc_uuid"):
+                        sc_uuid = sc_artist["sc_uuid"]
+                        sc_slug = sc_artist.get("slug")
+                        sc_profile = await sc.get_artist_profile(sc_uuid)
+                except Exception:
+                    sc_uuid = None
+                    sc_slug = None
+                    sc_profile = None
+
+            emerging = evaluate_emerging_artist(
+                EmergingSignals(
+                    name=name,
+                    bio=(sc_profile or {}).get("description"),
+                    career_stage=(sc_profile or {}).get("career_stage"),
+                    spotify_followers=followers,
+                    spotify_popularity=popularity,
+                    total_followers=followers,
+                ),
+                strict=False,
+            )
+            if not emerging.is_emerging:
                 continue
 
             existing = await db.execute(
@@ -239,6 +310,7 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
 
             artist = Artist(
                 id=new_uuid(), name=name,
+                bio=(sc_profile or {}).get("description"),
                 image_url=artist_data.get("image_url"),
                 genre_tags=artist_data.get("genres") or [],
                 is_candidate=True,
@@ -248,21 +320,28 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
 
             db.add(PlatformAccount(
                 id=new_uuid(), artist_id=artist.id, platform="spotify",
-                platform_id=sp_id, platform_url=artist_data.get("platform_url"),
+                platform_id=sp_id,
+                platform_url=artist_data.get("platform_url"),
+                platform_metadata={
+                    "followers": followers,
+                    "popularity": popularity,
+                    "genres": artist_data.get("genres") or [],
+                    "emerging_reasons": list(emerging.reasons),
+                },
             ))
 
             # Cross-reference with Soundcharts
-            if sc.available:
-                try:
-                    sc_artist = await sc.get_artist_by_platform_id("spotify", sp_id)
-                    if sc_artist and sc_artist.get("sc_uuid"):
-                        db.add(PlatformAccount(
-                            id=new_uuid(), artist_id=artist.id, platform="soundcharts",
-                            platform_id=sc_artist["sc_uuid"],
-                            platform_url=f"https://app.soundcharts.com/app/artist/{sc_artist.get('slug') or sc_artist['sc_uuid']}",
-                        ))
-                except Exception:
-                    pass
+            if sc_uuid:
+                db.add(PlatformAccount(
+                    id=new_uuid(), artist_id=artist.id, platform="soundcharts",
+                    platform_id=sc_uuid,
+                    platform_url=f"https://app.soundcharts.com/app/artist/{sc_slug or sc_uuid}",
+                    platform_metadata={
+                        "career_stage": (sc_profile or {}).get("career_stage"),
+                        "growth_level": (sc_profile or {}).get("growth_level"),
+                        "genres": (sc_profile or {}).get("genres") or [],
+                    },
+                ))
 
             discovered += 1
 
@@ -281,7 +360,7 @@ async def pull_graph_for_label(db, label_id: str):
 
     # Primary: Soundcharts related artists (works on Starter tier)
     if sc.available:
-        discovered = await _discover_via_soundcharts(db, sc, label_id, label.name)
+        discovered = await _discover_via_soundcharts(db, sc, spotify, label_id, label.name)
 
     # Fallback: Spotify related artists (needs user-auth OAuth, may 403 with client credentials)
     if discovered == 0 and spotify.available:

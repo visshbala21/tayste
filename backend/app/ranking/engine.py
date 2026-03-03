@@ -4,10 +4,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import (
     LabelCluster, Embedding, ArtistFeature, Recommendation,
-    Artist, RosterMembership
+    Artist, RosterMembership, PlatformAccount
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
+from app.services.emerging import EmergingSignals, evaluate_emerging_artist
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
             min_growth_30d=0.04,
             min_momentum=0.18,
             max_risk=0.70,
-            allow_without_features=True,
+            allow_without_features=False,
             allow_low_momentum=False,
             min_results=20,
         )
@@ -54,7 +55,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
             min_growth_30d=0.02,
             min_momentum=0.10,
             max_risk=0.75,
-            allow_without_features=True,
+            allow_without_features=False,
             allow_low_momentum=True,
             min_results=35,
         )
@@ -68,7 +69,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
         min_growth_30d=0.0,
         min_momentum=0.0,
         max_risk=0.80,
-        allow_without_features=True,
+        allow_without_features=False,
         allow_low_momentum=True,
         min_results=60,
     )
@@ -109,6 +110,15 @@ def _scale_score(features: ArtistFeature | None) -> float:
     return float(max(0.0, min(1.0, 0.7 * follower_score + 0.3 * popularity_score)))
 
 
+def _to_int(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendation]:
     """Score and rank candidate artists for a label."""
     batch_id = new_uuid()
@@ -128,6 +138,8 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         )
     )
     roster_ids = set(r[0] for r in result.all())
+    result = await db.execute(select(RosterMembership.artist_id).distinct())
+    globally_rostered_ids = {r[0] for r in result.all()}
     policy = _policy_for_roster_size(len(roster_ids))
 
     # Load roster embeddings for nearest match
@@ -150,6 +162,21 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
     candidate_ids = [artist.id for artist in candidates]
     if not candidate_ids:
         return []
+
+    # Candidate platform metadata (career stage + latest discovery scale hints).
+    result = await db.execute(
+        select(
+            PlatformAccount.artist_id,
+            PlatformAccount.platform,
+            PlatformAccount.platform_metadata,
+        ).where(
+            PlatformAccount.artist_id.in_(candidate_ids),
+            PlatformAccount.platform.in_(["spotify", "soundcharts"]),
+        )
+    )
+    platform_metadata: dict[str, dict[str, dict]] = {}
+    for artist_id, platform, metadata in result.all():
+        platform_metadata.setdefault(artist_id, {})[platform] = metadata or {}
 
     # Preload candidate embeddings, preferring metric vectors.
     result = await db.execute(
@@ -178,6 +205,9 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
     fallback_payloads: list[dict] = []
 
     for artist in candidates:
+        if artist.id in globally_rostered_ids:
+            continue
+
         emb = candidate_embeddings.get(artist.id)
         if not emb:
             continue
@@ -194,13 +224,44 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         fit_score = max(0.0, min(1.0, fit_score))
 
         features = latest_features.get(artist.id)
+        artist_platform_meta = platform_metadata.get(artist.id, {})
+        spotify_meta = artist_platform_meta.get("spotify", {})
+        soundcharts_meta = artist_platform_meta.get("soundcharts", {})
+        feature_extra = features.extra if features and features.extra else {}
+        spotify_followers = (
+            _to_int(spotify_meta.get("followers"))
+            or _to_int(feature_extra.get("latest_followers"))
+            or _to_int(feature_extra.get("max_followers"))
+        )
+        spotify_popularity = (
+            _to_int(spotify_meta.get("popularity"))
+            or _to_int(feature_extra.get("spotify_popularity"))
+        )
+        total_followers = spotify_followers or _to_int(feature_extra.get("max_followers"))
+        emerging = evaluate_emerging_artist(
+            EmergingSignals(
+                name=artist.name,
+                bio=artist.bio,
+                career_stage=soundcharts_meta.get("career_stage"),
+                spotify_followers=spotify_followers,
+                spotify_popularity=spotify_popularity,
+                total_followers=total_followers,
+                growth_7d=features.growth_7d if features else None,
+                growth_30d=features.growth_30d if features else None,
+                momentum_score=features.momentum_score if features else None,
+            ),
+            strict=True,
+        )
+        if not emerging.is_emerging:
+            continue
+
         fallback_metrics = False
         if features:
             momentum = features.momentum_score if features else 0.0
             risk = features.risk_score if features else 0.0
         else:
-            momentum = 0.35
-            risk = 0.05
+            momentum = 0.12
+            risk = 0.18
             fallback_metrics = True
         momentum = max(0.0, min(1.0, float(momentum or 0.0)))
         risk = max(0.0, min(1.0, float(risk or 0.0)))
@@ -245,11 +306,13 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
                     "risk": policy.risk_weight,
                 },
                 "formula": "((fit*w_fit + momentum*w_momentum + scale*w_scale)/sum_w) - risk*w_risk",
+                "emerging_gate": "pass",
+                "emerging_reasons": list(emerging.reasons),
             },
         }
         if fallback_metrics:
             payload["score_breakdown"]["fallback"] = True
-            payload["score_breakdown"]["note"] = "No recent features; using conservative defaults"
+            payload["score_breakdown"]["note"] = "No recent features; using strict conservative defaults"
 
         if _passes_quality_gate(features, policy):
             qualified_payloads.append(payload)
