@@ -24,14 +24,10 @@ from app.api.schemas import (
     LabelImportInput, RosterImportInput, RosterImportResult, RosterParsedArtist,
     RosterConfirmInput, RosterConfirmExistingInput,
 )
-from app.connectors.youtube import YouTubeConnector
 from app.llm.roster_parse import parse_roster_text
 from app.connectors.identity import detect_platform_from_url, extract_platform_id
 from app.services.pipeline_queue import pipeline_queue
 from app.services.roster_files import extract_text_from_upload
-from app.jobs import ingest as ingest_job
-from app.jobs import score as score_job
-from app.jobs import llm_enrich as llm_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,11 +107,6 @@ async def _resolve_missing_platform_ids(
     default_platform: str,
 ) -> tuple[list[RosterParsedArtist], list[str]]:
     warnings: list[str] = []
-    yt = YouTubeConnector()
-    search_disabled = False
-    search_budget = 10
-    searches_used = 0
-    search_cache: dict[str, dict] = {}
 
     for entry in entries:
         platform = (entry.platform or default_platform).lower()
@@ -142,50 +133,16 @@ async def _resolve_missing_platform_ids(
         if entry.platform_id:
             continue
 
-        if search_disabled:
-            continue
-
         if entry.platform_url:
             channel_id = _extract_youtube_channel_id(entry.platform_url)
             if channel_id:
                 entry.platform_id = channel_id
                 continue
 
-        if not yt.available:
-            warnings.append(f"YouTube API unavailable; could not resolve channel for '{entry.name}'")
-            continue
-
-        if searches_used >= search_budget:
-            warnings.append("YouTube search budget reached; skipping remaining unresolved artists")
-            break
-
-        cache_key = (entry.name or "").strip().lower()
-        if cache_key and cache_key in search_cache:
-            match = search_cache[cache_key]
-            entry.platform_id = match.get("platform_id")
-            entry.platform_url = entry.platform_url or match.get("platform_url")
-            continue
-
-        try:
-            results = await yt.search_channels(entry.name, max_results=1)
-        except Exception as e:
-            msg = str(e)
-            if "403" in msg or "Forbidden" in msg:
-                warnings.append("YouTube search disabled (403 Forbidden). Check API key/quota/restrictions.")
-                search_disabled = True
-                continue
-            warnings.append(f"YouTube search failed for '{entry.name}': {e}")
-            continue
-
-        searches_used += 1
-        if results:
-            match = results[0]
-            if cache_key:
-                search_cache[cache_key] = match
-            entry.platform_id = match.get("platform_id")
-            entry.platform_url = entry.platform_url or match.get("platform_url")
-        else:
-            warnings.append(f"No YouTube channel found for '{entry.name}'")
+        warnings.append(
+            f"Missing YouTube channel ID for '{entry.name}'. "
+            "Automatic YouTube lookups are disabled; provide a channel URL or ID explicitly."
+        )
 
     return entries, warnings
 
@@ -722,7 +679,7 @@ async def import_roster_from_confirm(
     await db.commit()
 
     if data.run_pipeline:
-        _run_pipeline_async()
+        await _enqueue_pipeline(label.id)
 
     return RosterImportResult(
         label_id=label.id,

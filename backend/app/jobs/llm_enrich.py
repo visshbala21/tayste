@@ -9,22 +9,48 @@ from app.llm.artist_brief import generate_artist_brief
 
 logger = logging.getLogger(__name__)
 
+LLM_DNA_CONCURRENCY = 3
+LLM_BRIEF_CONCURRENCY = 5
+
 
 async def run():
     logger.info("Starting LLM enrichment job...")
     async with async_session_factory() as db:
-        # Generate Label DNA for each label
+        # Generate Label DNA for each label (concurrently, semaphore-bounded)
         result = await db.execute(select(Label.id))
         label_ids = [r[0] for r in result.all()]
 
-        for lid in label_ids:
-            try:
-                logger.info(f"Generating Label DNA for {lid}")
-                await generate_label_dna(db, lid)
-            except Exception as e:
-                logger.error(f"Label DNA failed for {lid}: {e}")
+        dna_sem = asyncio.Semaphore(LLM_DNA_CONCURRENCY)
 
-        # Generate briefs for top recommended candidates per label
+        async def _generate_dna(lid: str):
+            async with dna_sem:
+                async with async_session_factory() as task_db:
+                    try:
+                        logger.info(f"Generating Label DNA for {lid}")
+                        await generate_label_dna(task_db, lid)
+                        await task_db.commit()
+                    except Exception as e:
+                        logger.error(f"Label DNA failed for {lid}: {e}")
+
+        await asyncio.gather(
+            *[_generate_dna(lid) for lid in label_ids],
+            return_exceptions=True,
+        )
+
+        # Generate briefs for top recommended candidates per label (concurrently)
+        brief_sem = asyncio.Semaphore(LLM_BRIEF_CONCURRENCY)
+
+        async def _generate_brief(artist_id: str, label_id: str):
+            async with brief_sem:
+                async with async_session_factory() as task_db:
+                    try:
+                        logger.info(f"Generating brief for artist {artist_id}")
+                        await generate_artist_brief(task_db, artist_id, label_id)
+                        await task_db.commit()
+                    except Exception as e:
+                        logger.error(f"Brief failed for {artist_id}: {e}")
+
+        brief_tasks = []
         for lid in label_ids:
             result = await db.execute(
                 select(Recommendation).where(Recommendation.label_id == lid)
@@ -32,13 +58,10 @@ async def run():
             )
             recs = result.scalars().all()
             for rec in recs:
-                try:
-                    logger.info(f"Generating brief for artist {rec.artist_id}")
-                    await generate_artist_brief(db, rec.artist_id, lid)
-                except Exception as e:
-                    logger.error(f"Brief failed for {rec.artist_id}: {e}")
+                brief_tasks.append(_generate_brief(rec.artist_id, lid))
 
-        await db.commit()
+        await asyncio.gather(*brief_tasks, return_exceptions=True)
+
     logger.info("LLM enrichment complete.")
 
 

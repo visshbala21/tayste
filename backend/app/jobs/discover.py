@@ -6,7 +6,6 @@ from app.db.session import async_session_factory
 from app.models.tables import Label, Artist, PlatformAccount, RosterMembership
 from app.models.base import new_uuid
 import re
-from app.connectors.youtube import YouTubeConnector
 from app.connectors.spotify import SpotifyConnector
 from app.llm.label_dna import generate_label_dna
 from app.llm.query_expansion import expand_queries
@@ -91,14 +90,11 @@ async def discover_for_label(db, label_id: str):
         queries = [f"{label.name} emerging artists", f"{label.name} new music"]
     else:
         expanded = expand_queries(label_dna, label.name)
+        # We still reuse these text seeds, but discovery uses Spotify/Soundcharts data.
         queries = expanded.youtube_queries[:5]
 
-    yt = YouTubeConnector()
     spotify = SpotifyConnector()
     discovered = 0
-    yt_disabled = False
-    yt_budget = 5
-    yt_used = 0
     spotify_budget = 25
     spotify_used = 0
     max_candidates = 60
@@ -106,44 +102,6 @@ async def discover_for_label(db, label_id: str):
     for query in queries:
         if discovered >= max_candidates:
             break
-        if yt.available and not yt_disabled and yt_used < yt_budget:
-            try:
-                channels = await yt.search_channels(query, max_results=3)
-            except Exception as e:
-                msg = str(e)
-                if "400" in msg or "403" in msg or "Forbidden" in msg or "429" in msg:
-                    yt_disabled = True
-                    channels = []
-                else:
-                    channels = []
-            for ch in channels:
-                if is_likely_slop(ch.get("name") or ""):
-                    continue
-                # Check if already exists
-                result = await db.execute(
-                    select(PlatformAccount).where(
-                        PlatformAccount.platform == "youtube",
-                        PlatformAccount.platform_id == ch["platform_id"],
-                    )
-                )
-                if result.scalar_one_or_none():
-                    continue
-
-                artist = Artist(
-                    id=new_uuid(), name=ch["name"], bio=ch.get("description"),
-                    image_url=ch.get("image_url"), is_candidate=True,
-                )
-                db.add(artist)
-                await db.flush()
-
-                account = PlatformAccount(
-                    id=new_uuid(), artist_id=artist.id, platform="youtube",
-                    platform_id=ch["platform_id"],
-                    platform_url=ch.get("platform_url"),
-                )
-                db.add(account)
-                discovered += 1
-            yt_used += 1
 
         if spotify.available and spotify_used < spotify_budget and discovered < max_candidates:
             try:

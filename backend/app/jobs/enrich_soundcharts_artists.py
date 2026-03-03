@@ -17,6 +17,7 @@ from app.services.embeddings import build_metric_vector, store_embedding
 logger = logging.getLogger(__name__)
 
 SC_PLATFORMS = ["spotify", "youtube"]
+ENRICH_CONCURRENCY = 5
 
 
 def _is_hot(artist_id: str, features_map: dict, days_since_discovery: int) -> bool:
@@ -30,7 +31,8 @@ def _is_hot(artist_id: str, features_map: dict, days_since_discovery: int) -> bo
 
 
 async def enrich_artist(
-    db, sc: SoundchartsConnector, artist_id: str, sc_uuid: str, is_hot: bool
+    db, sc: SoundchartsConnector, artist_id: str, sc_uuid: str, is_hot: bool,
+    existing_snapshots: set[tuple[str, str, str]] | None = None,
 ):
     """Pull Soundcharts stats and create Snapshots for one artist."""
     now = datetime.utcnow()
@@ -61,22 +63,35 @@ async def enrich_artist(
     since_str = since.isoformat()
     until_str = until.isoformat()
 
+    # Fetch all 4 API calls in parallel (2 platforms x 2 stat types)
+    async def _fetch_stats(platform: str, stat_type: str):
+        try:
+            if stat_type == "audience":
+                return await sc.get_audience_stats(sc_uuid, platform, since_str, until_str)
+            else:
+                return await sc.get_streaming_stats(sc_uuid, platform, since_str, until_str)
+        except Exception as e:
+            level = logging.WARNING if stat_type == "audience" else logging.DEBUG
+            logger.log(level, f"SC {stat_type} stats failed for {sc_uuid}/{platform}: {e}")
+            return []
+
+    results = await asyncio.gather(
+        *[_fetch_stats(p, t) for p in SC_PLATFORMS for t in ("audience", "streaming")]
+    )
+    # Unpack: spotify_audience, spotify_streaming, youtube_audience, youtube_streaming
+    platform_data = {}
+    idx = 0
+    for platform in SC_PLATFORMS:
+        platform_data[platform] = {
+            "audience": results[idx],
+            "streaming": results[idx + 1],
+        }
+        idx += 2
+
     for platform in SC_PLATFORMS:
         snapshot_platform = f"soundcharts_{platform}"
-
-        # Pull audience (followers) time-series
-        try:
-            audience = await sc.get_audience_stats(sc_uuid, platform, since_str, until_str)
-        except Exception as e:
-            logger.warning(f"SC audience stats failed for {sc_uuid}/{platform}: {e}")
-            audience = []
-
-        # Pull streaming (listeners/views) time-series
-        try:
-            streaming = await sc.get_streaming_stats(sc_uuid, platform, since_str, until_str)
-        except Exception as e:
-            logger.debug(f"SC streaming stats failed for {sc_uuid}/{platform}: {e}")
-            streaming = []
+        audience = platform_data[platform]["audience"]
+        streaming = platform_data[platform]["streaming"]
 
         # Index streaming data by date for merging
         streaming_by_date: dict[str, dict] = {}
@@ -96,16 +111,21 @@ async def enrich_artist(
             except (ValueError, TypeError):
                 continue
 
-            # Dedup: check (artist_id, platform, date)
-            existing = await db.execute(
-                select(Snapshot.id).where(
-                    Snapshot.artist_id == artist_id,
-                    Snapshot.platform == snapshot_platform,
-                    func.date(Snapshot.captured_at) == captured.date(),
+            # Dedup: check prefetched set or fall back to DB query
+            date_key = captured.date().isoformat()
+            if existing_snapshots is not None:
+                if (artist_id, snapshot_platform, date_key) in existing_snapshots:
+                    continue
+            else:
+                existing = await db.execute(
+                    select(Snapshot.id).where(
+                        Snapshot.artist_id == artist_id,
+                        Snapshot.platform == snapshot_platform,
+                        func.date(Snapshot.captured_at) == captured.date(),
+                    )
                 )
-            )
-            if existing.scalar_one_or_none():
-                continue
+                if existing.scalar_one_or_none():
+                    continue
 
             followers = day_data.get("followerCount") or day_data.get("value")
             views = None
@@ -153,6 +173,9 @@ async def enrich_artist(
                 extra_metrics=extra if extra else None,
             )
             db.add(snapshot)
+            # Track in prefetched set so subsequent days don't re-insert
+            if existing_snapshots is not None:
+                existing_snapshots.add((artist_id, snapshot_platform, date_key))
 
     await db.flush()
 
@@ -215,19 +238,48 @@ async def run():
         creation_map = {r[0]: r[1] for r in result.all()}
         now = datetime.utcnow()
 
+        # Pre-fetch all existing snapshot keys for batch dedup
+        result = await db.execute(
+            select(
+                Snapshot.artist_id,
+                Snapshot.platform,
+                func.date(Snapshot.captured_at),
+            ).where(
+                Snapshot.artist_id.in_(artist_ids),
+                Snapshot.platform.like("soundcharts_%"),
+            )
+        )
+        existing_snapshots: set[tuple[str, str, str]] = set()
+        for row in result.all():
+            date_val = row[2]
+            if hasattr(date_val, 'isoformat'):
+                date_str = date_val.isoformat()
+            else:
+                date_str = str(date_val)
+            existing_snapshots.add((row[0], row[1], date_str))
+
         logger.info(f"Enriching {len(sc_artists)} artists from Soundcharts")
 
-        for artist_id, sc_uuid in sc_artists:
+        # Semaphore-bounded concurrent enrichment
+        sem = asyncio.Semaphore(ENRICH_CONCURRENCY)
+
+        async def _enrich_one(artist_id: str, sc_uuid: str):
             created = creation_map.get(artist_id)
             days_since = (now - created).days if created else 0
             is_hot = _is_hot(artist_id, features_map, days_since)
+            async with sem:
+                async with async_session_factory() as task_db:
+                    try:
+                        await enrich_artist(task_db, sc, artist_id, sc_uuid, is_hot, existing_snapshots)
+                        await task_db.commit()
+                    except Exception as e:
+                        logger.error(f"SC enrichment failed for artist {artist_id}: {e}")
 
-            try:
-                await enrich_artist(db, sc, artist_id, sc_uuid, is_hot)
-            except Exception as e:
-                logger.error(f"SC enrichment failed for artist {artist_id}: {e}")
+        await asyncio.gather(
+            *[_enrich_one(aid, sc_uuid) for aid, sc_uuid in sc_artists],
+            return_exceptions=True,
+        )
 
-        await db.commit()
     logger.info("Soundcharts enrichment complete.")
 
 

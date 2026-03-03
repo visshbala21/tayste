@@ -16,6 +16,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 ALLOWED_CAREER_STAGES = {"emerging", "developing"}
+PROFILE_LOOKUP_CONCURRENCY = 10
 settings = get_settings()
 
 
@@ -39,21 +40,24 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
     discovered = 0
     seen_uuids: set[str] = set()
 
-    for sc_uuid, _roster_artist_id in roster_sc:
-        if discovered >= max_candidates:
-            break
+    # --- Gather all related-artist calls in parallel ---
+    async def _fetch_related(sc_uuid: str):
         try:
-            related = await sc.get_related_artists(sc_uuid, limit=20)
+            return await sc.get_related_artists(sc_uuid, limit=20)
         except Exception as e:
             logger.warning(f"SC related artists failed for {sc_uuid}: {e}")
-            continue
+            return None
 
+    hop1_results = await asyncio.gather(
+        *[_fetch_related(sc_uuid) for sc_uuid, _ in roster_sc]
+    )
+
+    # Collect all unique candidates needing profile checks
+    candidates_needing_profile: list[tuple[dict, str, str]] = []  # (artist_data, rel_uuid, name)
+    for related in hop1_results:
         if not related:
             continue
-
         for artist_data in related:
-            if discovered >= max_candidates:
-                break
             rel_uuid = artist_data.get("sc_uuid", "")
             name = artist_data.get("name", "")
             if not rel_uuid or not name:
@@ -61,91 +65,105 @@ async def _discover_via_soundcharts(db, sc: SoundchartsConnector, label_id: str,
             if rel_uuid in seen_uuids:
                 continue
             seen_uuids.add(rel_uuid)
-
             if is_likely_slop(name):
                 continue
+            candidates_needing_profile.append((artist_data, rel_uuid, name))
 
+    # Batch profile lookups with semaphore
+    sem = asyncio.Semaphore(PROFILE_LOOKUP_CONCURRENCY)
+
+    async def _fetch_profile(sc_uuid: str):
+        async with sem:
             try:
-                profile = await sc.get_artist_profile(rel_uuid)
+                return await sc.get_artist_profile(sc_uuid)
             except Exception:
-                profile = None
-            if profile:
-                career_stage = (profile.get("career_stage") or "").lower()
-                if career_stage and career_stage not in ALLOWED_CAREER_STAGES:
-                    continue
+                return None
 
-            # Skip if SC UUID already exists
-            existing = await db.execute(
+    profiles = await asyncio.gather(
+        *[_fetch_profile(rel_uuid) for _, rel_uuid, _ in candidates_needing_profile]
+    )
+
+    # Process results sequentially (DB writes need serial access)
+    for (artist_data, rel_uuid, name), profile in zip(candidates_needing_profile, profiles):
+        if discovered >= max_candidates:
+            break
+        if profile:
+            career_stage = (profile.get("career_stage") or "").lower()
+            if career_stage and career_stage not in ALLOWED_CAREER_STAGES:
+                continue
+
+        # Skip if SC UUID already exists
+        existing = await db.execute(
+            select(PlatformAccount).where(
+                PlatformAccount.platform == "soundcharts",
+                PlatformAccount.platform_id == rel_uuid,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        # Skip if artist name already exists
+        existing_name = await db.execute(
+            select(Artist).where(Artist.name == name)
+        )
+        if existing_name.scalar_one_or_none():
+            continue
+
+        # Get cross-platform IDs (single API call per artist)
+        try:
+            ids = await sc.get_artist_identifiers(rel_uuid)
+        except Exception:
+            ids = {}
+
+        artist = Artist(
+            id=new_uuid(),
+            name=name,
+            image_url=artist_data.get("image_url"),
+            is_candidate=True,
+        )
+        db.add(artist)
+        await db.flush()
+
+        # Soundcharts account
+        db.add(PlatformAccount(
+            id=new_uuid(), artist_id=artist.id, platform="soundcharts",
+            platform_id=rel_uuid,
+            platform_url=f"https://app.soundcharts.com/app/artist/{artist_data.get('slug') or rel_uuid}",
+        ))
+
+        # Spotify account from cross-platform IDs
+        spotify_id = ids.get("spotify")
+        if spotify_id:
+            sp_existing = await db.execute(
                 select(PlatformAccount).where(
-                    PlatformAccount.platform == "soundcharts",
-                    PlatformAccount.platform_id == rel_uuid,
+                    PlatformAccount.platform == "spotify",
+                    PlatformAccount.platform_id == spotify_id,
                 )
             )
-            if existing.scalar_one_or_none():
-                continue
+            if not sp_existing.scalar_one_or_none():
+                db.add(PlatformAccount(
+                    id=new_uuid(), artist_id=artist.id, platform="spotify",
+                    platform_id=spotify_id,
+                    platform_url=f"https://open.spotify.com/artist/{spotify_id}",
+                ))
 
-            # Skip if artist name already exists
-            existing_name = await db.execute(
-                select(Artist).where(Artist.name == name)
-            )
-            if existing_name.scalar_one_or_none():
-                continue
-
-            # Get cross-platform IDs (single API call per artist)
-            try:
-                ids = await sc.get_artist_identifiers(rel_uuid)
-            except Exception:
-                ids = {}
-
-            artist = Artist(
-                id=new_uuid(),
-                name=name,
-                image_url=artist_data.get("image_url"),
-                is_candidate=True,
-            )
-            db.add(artist)
-            await db.flush()
-
-            # Soundcharts account
-            db.add(PlatformAccount(
-                id=new_uuid(), artist_id=artist.id, platform="soundcharts",
-                platform_id=rel_uuid,
-                platform_url=f"https://app.soundcharts.com/app/artist/{artist_data.get('slug') or rel_uuid}",
-            ))
-
-            # Spotify account from cross-platform IDs
-            spotify_id = ids.get("spotify")
-            if spotify_id:
-                sp_existing = await db.execute(
-                    select(PlatformAccount).where(
-                        PlatformAccount.platform == "spotify",
-                        PlatformAccount.platform_id == spotify_id,
-                    )
+        # YouTube account from cross-platform IDs
+        yt_id = ids.get("youtube")
+        if yt_id:
+            yt_existing = await db.execute(
+                select(PlatformAccount).where(
+                    PlatformAccount.platform == "youtube",
+                    PlatformAccount.platform_id == yt_id,
                 )
-                if not sp_existing.scalar_one_or_none():
-                    db.add(PlatformAccount(
-                        id=new_uuid(), artist_id=artist.id, platform="spotify",
-                        platform_id=spotify_id,
-                        platform_url=f"https://open.spotify.com/artist/{spotify_id}",
-                    ))
+            )
+            if not yt_existing.scalar_one_or_none():
+                db.add(PlatformAccount(
+                    id=new_uuid(), artist_id=artist.id, platform="youtube",
+                    platform_id=yt_id,
+                    platform_url=f"https://youtube.com/channel/{yt_id}",
+                ))
 
-            # YouTube account from cross-platform IDs
-            yt_id = ids.get("youtube")
-            if yt_id:
-                yt_existing = await db.execute(
-                    select(PlatformAccount).where(
-                        PlatformAccount.platform == "youtube",
-                        PlatformAccount.platform_id == yt_id,
-                    )
-                )
-                if not yt_existing.scalar_one_or_none():
-                    db.add(PlatformAccount(
-                        id=new_uuid(), artist_id=artist.id, platform="youtube",
-                        platform_id=yt_id,
-                        platform_url=f"https://youtube.com/channel/{yt_id}",
-                    ))
-
-            discovered += 1
+        discovered += 1
 
     return discovered
 
@@ -168,13 +186,20 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
     discovered = 0
     seen_spotify_ids: set[str] = set()
 
-    for spotify_id, _roster_artist_id in roster_spotify:
+    # --- Gather all related-artist calls in parallel ---
+    async def _fetch_spotify_related(spotify_id: str):
         try:
-            related = await spotify.get_related_artists(spotify_id)
+            return await spotify.get_related_artists(spotify_id)
         except Exception as e:
             logger.warning(f"Spotify related artists failed for {spotify_id}: {e}")
-            continue
+            return None
 
+    hop1_results = await asyncio.gather(
+        *[_fetch_spotify_related(sp_id) for sp_id, _ in roster_spotify]
+    )
+
+    # Process results sequentially (DB writes via single session)
+    for related in hop1_results:
         if not related:
             continue
 

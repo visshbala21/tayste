@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CANDIDATES_PER_LABEL = 100
 ALLOWED_CAREER_STAGES = {"emerging", "developing"}
+CROSSREF_CONCURRENCY = 10
 
 
 async def _crossref_with_soundcharts(db, sc: SoundchartsConnector):
@@ -43,35 +44,61 @@ async def _crossref_with_soundcharts(db, sc: SoundchartsConnector):
     if not unlinked:
         return
 
+    # Pre-fetch existing SC platform IDs to avoid per-task DB queries
+    result = await db.execute(
+        select(PlatformAccount.platform_id).where(
+            PlatformAccount.platform == "soundcharts"
+        )
+    )
+    existing_sc_uuids: set[str] = {r[0] for r in result.all()}
+
+    sem = asyncio.Semaphore(CROSSREF_CONCURRENCY)
     linked = 0
-    for artist_id, spotify_id in unlinked:
-        try:
-            sc_artist = await sc.get_artist_by_platform_id("spotify", spotify_id)
-        except Exception:
-            continue
-        if not sc_artist or not sc_artist.get("sc_uuid"):
-            continue
+    lock = asyncio.Lock()  # Protect linked counter and DB writes
 
-        sc_uuid = sc_artist["sc_uuid"]
-        # Check we don't already have this SC UUID for another artist
-        existing = await db.execute(
-            select(PlatformAccount).where(
-                PlatformAccount.platform == "soundcharts",
-                PlatformAccount.platform_id == sc_uuid,
-            )
-        )
-        if existing.scalar_one_or_none():
-            continue
+    async def _crossref_one(artist_id: str, spotify_id: str):
+        nonlocal linked
+        async with sem:
+            try:
+                sc_artist = await sc.get_artist_by_platform_id("spotify", spotify_id)
+            except Exception:
+                return
+            if not sc_artist or not sc_artist.get("sc_uuid"):
+                return
 
-        sc_account = PlatformAccount(
-            id=new_uuid(),
-            artist_id=artist_id,
-            platform="soundcharts",
-            platform_id=sc_uuid,
-            platform_url=f"https://app.soundcharts.com/app/artist/{sc_artist.get('slug') or sc_uuid}",
-        )
-        db.add(sc_account)
-        linked += 1
+            sc_uuid = sc_artist["sc_uuid"]
+
+            async with lock:
+                # Check we don't already have this SC UUID
+                if sc_uuid in existing_sc_uuids:
+                    return
+
+                # Double-check DB in case another task just inserted
+                existing = await db.execute(
+                    select(PlatformAccount).where(
+                        PlatformAccount.platform == "soundcharts",
+                        PlatformAccount.platform_id == sc_uuid,
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    existing_sc_uuids.add(sc_uuid)
+                    return
+
+                sc_account = PlatformAccount(
+                    id=new_uuid(),
+                    artist_id=artist_id,
+                    platform="soundcharts",
+                    platform_id=sc_uuid,
+                    platform_url=f"https://app.soundcharts.com/app/artist/{sc_artist.get('slug') or sc_uuid}",
+                )
+                db.add(sc_account)
+                existing_sc_uuids.add(sc_uuid)
+                linked += 1
+
+    await asyncio.gather(
+        *[_crossref_one(aid, sp_id) for aid, sp_id in unlinked],
+        return_exceptions=True,
+    )
 
     await db.flush()
     if linked:

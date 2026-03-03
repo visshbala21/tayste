@@ -138,7 +138,11 @@ async def ensure_fallback_embeddings(db: AsyncSession, artist_ids: list[str]):
         await store_embedding(db, artist.id, vec, provider="fallback")
 
 
-async def cluster_label_artists(db: AsyncSession, label_id: str, n_clusters: int = 3) -> list[dict]:
+async def cluster_label_artists(
+    db: AsyncSession,
+    label_id: str,
+    n_clusters: int | None = None,
+) -> list[dict]:
     """Cluster a label's roster artists and store centroids."""
     # Get roster artist IDs
     result = await db.execute(
@@ -147,6 +151,13 @@ async def cluster_label_artists(db: AsyncSession, label_id: str, n_clusters: int
         )
     )
     artist_ids = [r[0] for r in result.all()]
+    if n_clusters is None:
+        if len(artist_ids) <= 3:
+            n_clusters = len(artist_ids)
+        else:
+            # Scale cluster granularity with roster size while keeping maps readable.
+            n_clusters = int(round(np.sqrt(len(artist_ids))))
+            n_clusters = max(2, min(12, n_clusters))
     if len(artist_ids) < n_clusters:
         n_clusters = max(1, len(artist_ids))
 
