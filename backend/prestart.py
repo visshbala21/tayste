@@ -86,7 +86,21 @@ def main() -> None:
                 ))
             print(f"prestart: stamped migration {level}", flush=True)
         elif has_app_tables and has_alembic:
-            print("prestart: alembic_version already exists, nothing to do", flush=True)
+            # Check if alembic_version is empty or has a stale value
+            with engine.begin() as conn:
+                row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+                current = row[0] if row else None
+            print(f"prestart: alembic_version exists, current stamp = {current!r}", flush=True)
+
+            if not current:
+                # Table exists but is empty (failed migration left it behind)
+                level = detect_migration_level(insp)
+                print(f"prestart: alembic_version is empty — stamping {level}", flush=True)
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"INSERT INTO alembic_version (version_num) VALUES ('{level}')"
+                    ))
+                print(f"prestart: stamped migration {level}", flush=True)
         else:
             print("prestart: fresh database, alembic upgrade will run from scratch", flush=True)
     except Exception as e:
