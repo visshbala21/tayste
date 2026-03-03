@@ -2,9 +2,13 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
+from app.api.auth_routes import auth_router
 from app.services.pipeline_queue import pipeline_queue
+from app.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
+
+settings = get_settings()
 
 app = FastAPI(
     title="Tayste - AI A&R Intelligence",
@@ -14,12 +18,13 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", settings.frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(router, prefix="/api")
 
 @app.on_event("startup")

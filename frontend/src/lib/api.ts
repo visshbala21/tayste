@@ -1,3 +1,5 @@
+import { auth } from "@/lib/auth";
+
 // Server-side (SSR) uses Docker internal network; client-side uses the browser-accessible URL.
 const SERVER_API_BASE = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
 const CLIENT_API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
@@ -6,12 +8,46 @@ function getApiBase(): string {
   return typeof window === "undefined" ? SERVER_API_BASE : CLIENT_API_BASE;
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") {
+    // Server-side: read from NextAuth session
+    try {
+      const session = await auth();
+      if (session?.backendToken) {
+        return { Authorization: `Bearer ${session.backendToken}` };
+      }
+    } catch {
+      // auth() may fail outside request context
+    }
+    return {};
+  }
+
+  // Client-side: fetch session from NextAuth API
+  try {
+    const res = await fetch("/api/auth/session");
+    if (res.ok) {
+      const session = await res.json();
+      if (session?.backendToken) {
+        return { Authorization: `Bearer ${session.backendToken}` };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", ...authHeaders, ...options?.headers },
     cache: "no-store",
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
@@ -19,11 +55,16 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 async function fetchCachedAPI<T>(path: string, options?: RequestInit): Promise<T> {
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", ...authHeaders, ...options?.headers },
     next: { revalidate: 30 },
   } as RequestInit);
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
@@ -31,11 +72,17 @@ async function fetchCachedAPI<T>(path: string, options?: RequestInit): Promise<T
 }
 
 async function fetchMultipart<T>(path: string, form: FormData): Promise<T> {
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api${path}`, {
     method: "POST",
     body: form,
+    headers: { ...authHeaders },
     cache: "no-store",
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }

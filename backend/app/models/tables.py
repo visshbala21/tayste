@@ -17,6 +17,19 @@ from typing import Optional, List
 from app.models.base import Base, TimestampMixin, new_uuid
 
 
+class User(Base, TimestampMixin):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    google_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(255))
+    picture: Mapped[Optional[str]] = mapped_column(String(512))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    labels: Mapped[List["Label"]] = relationship(back_populates="owner")
+
+
 class Label(Base, TimestampMixin):
     __tablename__ = "labels"
 
@@ -28,7 +41,9 @@ class Label(Base, TimestampMixin):
     pipeline_status: Mapped[str] = mapped_column(String(20), default="idle")
     pipeline_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     pipeline_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
+    owner: Mapped[Optional["User"]] = relationship(back_populates="labels")
     roster_memberships: Mapped[List["RosterMembership"]] = relationship(back_populates="label")
     clusters: Mapped[List["LabelCluster"]] = relationship(back_populates="label")
     recommendations: Mapped[List["Recommendation"]] = relationship(back_populates="label")

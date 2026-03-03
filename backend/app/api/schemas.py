@@ -3,6 +3,18 @@ from typing import Optional, List
 from datetime import datetime
 
 
+# --- User ---
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: Optional[str]
+    picture: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 # --- Label ---
 
 class LabelCreate(BaseModel):

@@ -8,7 +8,7 @@ from app.models.tables import (
     Label, Artist, PlatformAccount, RosterMembership,
     Snapshot, LabelCluster, ArtistFeature, Recommendation,
     Feedback, ArtistLLMBrief, Watchlist, WatchlistItem, Alert, LabelArtistState,
-    AlertRule,
+    AlertRule, User,
 )
 from app.models.base import new_uuid
 from app.api.schemas import (
@@ -28,6 +28,7 @@ from app.llm.roster_parse import parse_roster_text
 from app.connectors.identity import detect_platform_from_url, extract_platform_id
 from app.services.pipeline_queue import pipeline_queue
 from app.services.roster_files import extract_text_from_upload
+from app.auth.dependencies import get_current_user, verify_label_ownership
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -275,13 +276,22 @@ async def _upsert_roster_entries(
     return created, skipped, warnings
 
 
+async def _get_user_label(db: AsyncSession, label_id: str, user: User) -> Label:
+    """Load a label and verify ownership. Raises 404 or 403."""
+    label = await db.get(Label, label_id)
+    if not label:
+        raise HTTPException(status_code=404, detail="Label not found")
+    await verify_label_ownership(label, user)
+    return label
+
+
 def _enqueue_pipeline(label_id: str):
     # Replace any running/queued pipeline with this one
     return pipeline_queue.enqueue(label_id, replace=True)
 
 @router.post("/labels", response_model=LabelResponse)
-async def create_label(data: LabelCreate, db: AsyncSession = Depends(get_db)):
-    label = Label(id=new_uuid(), name=data.name, description=data.description, genre_tags=data.genre_tags or {})
+async def create_label(data: LabelCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = Label(id=new_uuid(), name=data.name, description=data.description, genre_tags=data.genre_tags or {}, user_id=user.id)
     db.add(label)
     await db.flush()
     await _ensure_default_watchlist(db, label.id)
@@ -290,24 +300,22 @@ async def create_label(data: LabelCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/labels", response_model=list[LabelResponse])
-async def list_labels(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Label).order_by(Label.created_at.desc()))
+async def list_labels(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Label).where(Label.user_id == user.id).order_by(Label.created_at.desc())
+    )
     return result.scalars().all()
 
 
 @router.get("/labels/{label_id}", response_model=LabelResponse)
-async def get_label(label_id: str, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def get_label(label_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
     return label
 
 
 @router.post("/labels/{label_id}/roster")
-async def add_roster(label_id: str, data: RosterInput, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def add_roster(label_id: str, data: RosterInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
 
     added = []
     for ra in data.artists:
@@ -356,7 +364,7 @@ async def add_roster(label_id: str, data: RosterInput, db: AsyncSession = Depend
 
 
 @router.post("/labels/import-text", response_model=RosterImportResult)
-async def import_label_from_text(data: LabelImportInput, db: AsyncSession = Depends(get_db)):
+async def import_label_from_text(data: LabelImportInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     parsed = parse_roster_text(data.raw_text, data.default_platform)
     entries = parsed.artists
     if not entries:
@@ -386,6 +394,7 @@ async def import_label_from_text(data: LabelImportInput, db: AsyncSession = Depe
         name=data.label.name,
         description=data.label.description,
         genre_tags=data.label.genre_tags or {},
+        user_id=user.id,
     )
     db.add(label)
     await db.flush()
@@ -422,6 +431,7 @@ async def import_label_from_file(
     resolve_missing: bool = Form(True),
     dry_run: bool = Form(False),
     run_pipeline: bool = Form(False),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     data = await file.read()
@@ -463,6 +473,7 @@ async def import_label_from_file(
         name=label_name,
         description=label_description,
         genre_tags=genre_tags or {},
+        user_id=user.id,
     )
     db.add(label)
     await db.flush()
@@ -490,7 +501,7 @@ async def import_label_from_file(
 
 
 @router.post("/labels/import-confirm", response_model=RosterImportResult)
-async def import_label_from_confirm(data: RosterConfirmInput, db: AsyncSession = Depends(get_db)):
+async def import_label_from_confirm(data: RosterConfirmInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     entries = data.artists
     if not entries:
         return RosterImportResult(
@@ -510,6 +521,7 @@ async def import_label_from_confirm(data: RosterConfirmInput, db: AsyncSession =
         name=data.label.name,
         description=data.label.description,
         genre_tags=data.label.genre_tags or {},
+        user_id=user.id,
     )
     db.add(label)
     await db.flush()
@@ -538,11 +550,9 @@ async def import_label_from_confirm(data: RosterConfirmInput, db: AsyncSession =
 
 @router.post("/labels/{label_id}/roster/import-text", response_model=RosterImportResult)
 async def import_roster_from_text(
-    label_id: str, data: RosterImportInput, db: AsyncSession = Depends(get_db)
+    label_id: str, data: RosterImportInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
 
     parsed = parse_roster_text(data.raw_text, data.default_platform)
     entries = parsed.artists
@@ -597,11 +607,10 @@ async def import_roster_from_file(
     resolve_missing: bool = Form(True),
     dry_run: bool = Form(False),
     run_pipeline: bool = Form(False),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
 
     data = await file.read()
     raw_text, extract_warnings = extract_text_from_upload(file.filename, file.content_type, data)
@@ -653,11 +662,9 @@ async def import_roster_from_file(
 
 @router.post("/labels/{label_id}/roster/import-confirm", response_model=RosterImportResult)
 async def import_roster_from_confirm(
-    label_id: str, data: RosterConfirmExistingInput, db: AsyncSession = Depends(get_db)
+    label_id: str, data: RosterConfirmExistingInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
 
     entries = data.artists
     if not entries:
@@ -694,10 +701,8 @@ async def import_roster_from_confirm(
     )
 
 @router.get("/labels/{label_id}/taste-map", response_model=TasteMapResponse)
-async def get_taste_map(label_id: str, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def get_taste_map(label_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
 
     result = await db.execute(
         select(LabelCluster).where(LabelCluster.label_id == label_id)
@@ -737,10 +742,8 @@ async def get_taste_map(label_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/labels/{label_id}/scout-feed", response_model=ScoutFeedResponse)
-async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def get_scout_feed(label_id: str, limit: int = 50, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
 
     cluster_result = await db.execute(
         select(LabelCluster).where(LabelCluster.label_id == label_id)
@@ -856,11 +859,31 @@ async def get_scout_feed(label_id: str, limit: int = 50, db: AsyncSession = Depe
 async def get_artist_detail(
     artist_id: str,
     label_id: str | None = None,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     artist = await db.get(Artist, artist_id)
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
+
+    # Verify user has access through one of their labels
+    if label_id:
+        label = await _get_user_label(db, label_id, user)
+    else:
+        access_check = await db.execute(
+            select(Label.id).join(RosterMembership, RosterMembership.label_id == Label.id)
+            .where(Label.user_id == user.id, RosterMembership.artist_id == artist_id)
+            .limit(1)
+        )
+        if not access_check.scalar_one_or_none():
+            # Also check recommendations
+            rec_check = await db.execute(
+                select(Label.id).join(Recommendation, Recommendation.label_id == Label.id)
+                .where(Label.user_id == user.id, Recommendation.artist_id == artist_id)
+                .limit(1)
+            )
+            if not rec_check.scalar_one_or_none():
+                raise HTTPException(status_code=403, detail="You do not have access to this artist")
 
     # Platform accounts
     result = await db.execute(
@@ -929,10 +952,8 @@ async def get_artist_detail(
 
 
 @router.post("/labels/{label_id}/feedback", response_model=FeedbackResponse)
-async def submit_feedback(label_id: str, data: FeedbackInput, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def submit_feedback(label_id: str, data: FeedbackInput, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
 
     artist = await db.get(Artist, data.artist_id)
     if not artist:
@@ -956,11 +977,10 @@ async def update_artist_stage(
     label_id: str,
     artist_id: str,
     data: StageUpdateInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
     artist = await db.get(Artist, artist_id)
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
@@ -969,10 +989,8 @@ async def update_artist_stage(
 
 
 @router.get("/labels/{label_id}/watchlists", response_model=list[WatchlistResponse])
-async def list_watchlists(label_id: str, db: AsyncSession = Depends(get_db)):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+async def list_watchlists(label_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
     await _ensure_default_watchlist(db, label_id)
     result = await db.execute(
         select(Watchlist, func.count(WatchlistItem.id))
@@ -1001,11 +1019,10 @@ async def list_watchlists(label_id: str, db: AsyncSession = Depends(get_db)):
 async def create_watchlist(
     label_id: str,
     data: WatchlistCreate,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
     watchlist = Watchlist(
         id=new_uuid(),
         label_id=label_id,
@@ -1031,8 +1048,10 @@ async def create_watchlist(
 async def get_watchlist_detail(
     label_id: str,
     watchlist_id: str,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_user_label(db, label_id, user)
     watchlist = await db.get(Watchlist, watchlist_id)
     if not watchlist or watchlist.label_id != label_id:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -1079,8 +1098,10 @@ async def add_watchlist_item(
     label_id: str,
     watchlist_id: str,
     data: WatchlistItemInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_user_label(db, label_id, user)
     watchlist = await db.get(Watchlist, watchlist_id)
     if not watchlist or watchlist.label_id != label_id:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -1133,8 +1154,10 @@ async def remove_watchlist_item(
     label_id: str,
     watchlist_id: str,
     artist_id: str,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_user_label(db, label_id, user)
     watchlist = await db.get(Watchlist, watchlist_id)
     if not watchlist or watchlist.label_id != label_id:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -1157,11 +1180,10 @@ async def list_alerts(
     label_id: str,
     status: str | None = None,
     limit: int = 50,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
     limit = max(1, min(limit, 200))
     query = select(Alert, Artist.name).join(Artist).where(Alert.label_id == label_id)
     if status:
@@ -1191,8 +1213,10 @@ async def update_alert_status(
     label_id: str,
     alert_id: str,
     data: AlertStatusInput,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await _get_user_label(db, label_id, user)
     alert = await db.get(Alert, alert_id)
     if not alert or alert.label_id != label_id:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -1202,12 +1226,10 @@ async def update_alert_status(
 
 
 @router.post("/labels/{label_id}/llm/refresh")
-async def refresh_label_llm(label_id: str, db: AsyncSession = Depends(get_db)):
+async def refresh_label_llm(label_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Regenerate Label DNA via LLM."""
     from app.llm.label_dna import generate_label_dna
-    label = await db.get(Label, label_id)
-    if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+    label = await _get_user_label(db, label_id, user)
     result = await generate_label_dna(db, label_id)
     if result:
         return {"status": "ok", "label_dna": result.model_dump()}
@@ -1215,7 +1237,7 @@ async def refresh_label_llm(label_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/artists/{artist_id}/llm/refresh")
-async def refresh_artist_llm(artist_id: str, label_id: str = None, db: AsyncSession = Depends(get_db)):
+async def refresh_artist_llm(artist_id: str, label_id: str = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Regenerate artist scouting brief via LLM."""
     from app.llm.artist_brief import generate_artist_brief
     artist = await db.get(Artist, artist_id)

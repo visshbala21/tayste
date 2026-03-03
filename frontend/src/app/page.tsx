@@ -14,16 +14,10 @@ export default function LandingPage() {
         </span>
         <div className="flex items-center gap-4 animate-fade-in delay-300">
           <Link
-            href="/dashboard"
+            href="/login"
             className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
           >
-            Dashboard
-          </Link>
-          <Link
-            href="/import"
-            className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
-          >
-            Import
+            Sign In
           </Link>
           <Link
             href="/dashboard"

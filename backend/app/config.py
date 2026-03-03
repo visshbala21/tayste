@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     llm_timeout: int = 30
     llm_max_retries: int = 3
 
+    # Auth / JWT
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_hours: int = 168  # 7 days
+    google_client_id: str = ""
+    frontend_url: str = "http://localhost:3000"
+
     # Ranking weights
     fit_weight: float = 1.0
     momentum_weight: float = 1.0

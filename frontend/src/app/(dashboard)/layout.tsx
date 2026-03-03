@@ -1,6 +1,16 @@
 import Link from "next/link";
+import Image from "next/image";
+import { auth, signOut } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  if (!session?.backendToken) {
+    redirect("/login");
+  }
+
+  const user = session.backendUser;
+
   return (
     <>
       <nav className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
@@ -15,6 +25,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/import" className="text-muted hover:text-gray-200 hover:bg-surface-light px-3 py-1.5 rounded-lg transition-all duration-200">
               Import
             </Link>
+          </div>
+          <div className="flex items-center gap-3">
+            {user?.picture && (
+              <Image
+                src={user.picture}
+                alt={user.name || "User"}
+                width={28}
+                height={28}
+                className="rounded-full"
+              />
+            )}
+            {user?.name && (
+              <span className="text-sm text-gray-300 hidden sm:inline">{user.name}</span>
+            )}
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/" });
+              }}
+            >
+              <button
+                type="submit"
+                className="text-xs text-muted hover:text-gray-200 border border-border px-3 py-1.5 rounded-lg transition-all duration-200"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       </nav>
