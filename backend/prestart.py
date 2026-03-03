@@ -6,8 +6,24 @@ the schema, then stamp the correct version so 'alembic upgrade head' only
 runs the remaining migrations.
 """
 import os
+import sys
 
 from sqlalchemy import create_engine, inspect, text
+
+
+def get_db_url() -> str | None:
+    """Get a sync database URL from environment, trying multiple vars."""
+    for var in ("DATABASE_URL_SYNC", "DATABASE_URL"):
+        url = os.environ.get(var, "")
+        if url:
+            # Render uses postgres:// but SQLAlchemy needs postgresql://
+            if url.startswith("postgres://"):
+                url = "postgresql://" + url[len("postgres://"):]
+            # Ensure we have a sync (not async) URL
+            url = url.replace("postgresql+asyncpg://", "postgresql://")
+            print(f"prestart: using {var}", flush=True)
+            return url
+    return None
 
 
 def detect_migration_level(insp) -> str | None:
@@ -42,37 +58,40 @@ def detect_migration_level(insp) -> str | None:
 
 
 def main() -> None:
-    url = os.environ.get("DATABASE_URL_SYNC", "")
+    print("prestart: starting migration stamp check", flush=True)
+
+    url = get_db_url()
     if not url:
-        print("prestart: DATABASE_URL_SYNC not set, skipping stamp check")
+        print("prestart: no DATABASE_URL_SYNC or DATABASE_URL found, skipping", flush=True)
         return
 
-    # Render uses postgres:// but SQLAlchemy needs postgresql://
-    if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
+    try:
+        engine = create_engine(url)
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        print(f"prestart: found {len(tables)} tables in database", flush=True)
 
-    engine = create_engine(url)
-    insp = inspect(engine)
-    tables = set(insp.get_table_names())
+        has_app_tables = "labels" in tables
+        has_alembic = "alembic_version" in tables
 
-    has_app_tables = "labels" in tables
-    has_alembic = "alembic_version" in tables
-
-    if has_app_tables and not has_alembic:
-        level = detect_migration_level(insp)
-        print(f"prestart: tables exist but alembic_version missing — detected level {level}")
-        with engine.begin() as conn:
-            conn.execute(text(
-                "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
-            ))
-            conn.execute(text(
-                f"INSERT INTO alembic_version (version_num) VALUES ('{level}')"
-            ))
-        print(f"prestart: stamped migration {level}, 'alembic upgrade head' will apply remaining migrations")
-    elif has_app_tables and has_alembic:
-        print("prestart: alembic_version exists, nothing to do")
-    else:
-        print("prestart: fresh database, alembic upgrade will run from scratch")
+        if has_app_tables and not has_alembic:
+            level = detect_migration_level(insp)
+            print(f"prestart: tables exist but alembic_version missing — detected level {level}", flush=True)
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
+                ))
+                conn.execute(text(
+                    f"INSERT INTO alembic_version (version_num) VALUES ('{level}')"
+                ))
+            print(f"prestart: stamped migration {level}", flush=True)
+        elif has_app_tables and has_alembic:
+            print("prestart: alembic_version already exists, nothing to do", flush=True)
+        else:
+            print("prestart: fresh database, alembic upgrade will run from scratch", flush=True)
+    except Exception as e:
+        print(f"prestart: ERROR — {e}", flush=True)
+        print("prestart: continuing anyway, alembic upgrade will attempt to run", flush=True)
 
 
 if __name__ == "__main__":
