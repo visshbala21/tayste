@@ -2,8 +2,6 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { ScoutFeedClient } from "./client";
 
-export const dynamic = "force-dynamic";
-
 export default async function ScoutFeedPage({
   params,
   searchParams,

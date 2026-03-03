@@ -18,6 +18,18 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+async function fetchCachedAPI<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${getApiBase()}/api${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    next: { revalidate: 30 },
+  } as RequestInit);
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 async function fetchMultipart<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(`${getApiBase()}/api${path}`, {
     method: "POST",
@@ -227,13 +239,13 @@ export interface AlertItem {
 }
 
 export const api = {
-  getLabels: () => fetchAPI<Label[]>("/labels"),
-  getLabel: (id: string) => fetchAPI<Label>(`/labels/${id}`),
-  getTasteMap: (id: string) => fetchAPI<TasteMap>(`/labels/${id}/taste-map`),
+  getLabels: () => fetchCachedAPI<Label[]>("/labels"),
+  getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`),
+  getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`),
   getScoutFeed: (id: string, limit: number = 50) =>
-    fetchAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`),
+    fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`),
   getArtist: (id: string, labelId?: string) =>
-    fetchAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`),
+    fetchCachedAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`),
   submitFeedback: (labelId: string, data: { artist_id: string; action: string; notes?: string }) =>
     fetchAPI(`/labels/${labelId}/feedback`, { method: "POST", body: JSON.stringify(data) }),
   updateArtistStage: (labelId: string, artistId: string, data: { stage: string; notes?: string }) =>
@@ -269,11 +281,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getWatchlists: (labelId: string) =>
-    fetchAPI<Watchlist[]>(`/labels/${labelId}/watchlists`),
+    fetchCachedAPI<Watchlist[]>(`/labels/${labelId}/watchlists`),
   createWatchlist: (labelId: string, data: { name: string; description?: string }) =>
     fetchAPI<Watchlist>(`/labels/${labelId}/watchlists`, { method: "POST", body: JSON.stringify(data) }),
   getWatchlist: (labelId: string, watchlistId: string) =>
-    fetchAPI<WatchlistDetail>(`/labels/${labelId}/watchlists/${watchlistId}`),
+    fetchCachedAPI<WatchlistDetail>(`/labels/${labelId}/watchlists/${watchlistId}`),
   addToWatchlist: (labelId: string, watchlistId: string, data: { artist_id: string; notes?: string }) =>
     fetchAPI<WatchlistItem>(`/labels/${labelId}/watchlists/${watchlistId}/items`, {
       method: "POST",
@@ -282,7 +294,7 @@ export const api = {
   removeFromWatchlist: (labelId: string, watchlistId: string, artistId: string) =>
     fetchAPI(`/labels/${labelId}/watchlists/${watchlistId}/items/${artistId}`, { method: "DELETE" }),
   getAlerts: (labelId: string, status?: string, limit: number = 50) =>
-    fetchAPI<AlertItem[]>(`/labels/${labelId}/alerts?limit=${limit}${status ? `&status=${status}` : ""}`),
+    fetchCachedAPI<AlertItem[]>(`/labels/${labelId}/alerts?limit=${limit}${status ? `&status=${status}` : ""}`),
   updateAlertStatus: (labelId: string, alertId: string, status: string) =>
     fetchAPI(`/labels/${labelId}/alerts/${alertId}/status`, {
       method: "POST",

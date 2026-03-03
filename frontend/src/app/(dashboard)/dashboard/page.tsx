@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { api, Label } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
 export default async function DashboardPage() {
   let labels: Label[] = [];
   try {

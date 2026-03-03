@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { ScoutFeedItem } from "@/lib/api";
+import { api, type ScoutFeedItem } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
 
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
@@ -33,12 +33,7 @@ export function ScoutFeedClient({
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-      await fetch(`${API_BASE}/api/labels/${labelId}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist_id: artistId, action }),
-      });
+      await api.submitFeedback(labelId, { artist_id: artistId, action });
       setFeedbackSent((prev) => new Set(prev).add(artistId));
     } catch (e) {
       console.error("Feedback failed:", e);
@@ -48,12 +43,7 @@ export function ScoutFeedClient({
   const addToWatchlist = async (artistId: string) => {
     if (!defaultWatchlistId) return;
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-      await fetch(`${API_BASE}/api/labels/${labelId}/watchlists/${defaultWatchlistId}/items`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist_id: artistId }),
-      });
+      await api.addToWatchlist(labelId, defaultWatchlistId, { artist_id: artistId });
       setWatchlistAdded((prev) => new Set(prev).add(artistId));
     } catch (e) {
       console.error("Watchlist add failed:", e);

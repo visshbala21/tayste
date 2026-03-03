@@ -5,8 +5,6 @@ import { ArtistCharts } from "./charts";
 import { ArtistFeedback } from "./feedback";
 import { ArtistWatchlistButton } from "./watchlist";
 
-export const dynamic = "force-dynamic";
-
 export default async function ArtistDetailPage({
   params,
   searchParams,

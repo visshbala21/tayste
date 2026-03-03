@@ -2,19 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { WatchlistDetail, WatchlistItem } from "@/lib/api";
+import { api, type WatchlistDetail, type WatchlistItem } from "@/lib/api";
 
 export function WatchlistDetailClient({ labelId, detail }: { labelId: string; detail: WatchlistDetail }) {
   const [items, setItems] = useState<WatchlistItem[]>(detail.items);
 
   const remove = async (artistId: string) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-    const res = await fetch(
-      `${API_BASE}/api/labels/${labelId}/watchlists/${detail.watchlist.id}/items/${artistId}`,
-      { method: "DELETE" }
-    );
-    if (res.ok) {
+    try {
+      await api.removeFromWatchlist(labelId, detail.watchlist.id, artistId);
       setItems((prev) => prev.filter((i) => i.artist_id !== artistId));
+    } catch {
+      // ignore
     }
   };
 

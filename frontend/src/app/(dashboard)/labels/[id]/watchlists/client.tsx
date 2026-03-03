@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { AlertItem, Watchlist } from "@/lib/api";
+import { api, type AlertItem, type Watchlist } from "@/lib/api";
 
 type Props = {
   labelId: string;
@@ -22,32 +22,21 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
     if (!trimmed || creating) return;
     setCreating(true);
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-      const res = await fetch(`${API_BASE}/api/labels/${labelId}/watchlists`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, description: desc.trim() || undefined }),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setWatchlists((prev) => [...prev, created]);
-        setName("");
-        setDesc("");
-      }
+      const created = await api.createWatchlist(labelId, { name: trimmed, description: desc.trim() || undefined });
+      setWatchlists((prev) => [...prev, created]);
+      setName("");
+      setDesc("");
     } finally {
       setCreating(false);
     }
   };
 
-  const updateAlertStatus = async (alertId: string, status: string) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-    const res = await fetch(`${API_BASE}/api/labels/${labelId}/alerts/${alertId}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
+  const dismissAlert = async (alertId: string, status: string) => {
+    try {
+      await api.updateAlertStatus(labelId, alertId, status);
       setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    } catch {
+      // ignore
     }
   };
 
@@ -131,13 +120,13 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
                     View artist
                   </Link>
                   <button
-                    onClick={() => updateAlertStatus(alert.id, "seen")}
+                    onClick={() => dismissAlert(alert.id, "seen")}
                     className="text-xs bg-surface border border-border rounded px-2 py-1 hover:bg-surface-light"
                   >
                     Mark seen
                   </button>
                   <button
-                    onClick={() => updateAlertStatus(alert.id, "dismissed")}
+                    onClick={() => dismissAlert(alert.id, "dismissed")}
                     className="text-xs bg-surface border border-border rounded px-2 py-1 hover:bg-surface-light"
                   >
                     Dismiss

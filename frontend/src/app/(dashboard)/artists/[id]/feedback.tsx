@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { api } from "@/lib/api";
 import type { FeedbackAction } from "@/types";
 
 const ACTIONS: { action: FeedbackAction; label: string; color: string }[] = [
@@ -26,12 +27,7 @@ export function ArtistFeedback({
   const submit = async (action: string) => {
     setLoading(true);
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-      await fetch(`${API_BASE}/api/labels/${labelId}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist_id: artistId, action, notes: notes || undefined }),
-      });
+      await api.submitFeedback(labelId, { artist_id: artistId, action, notes: notes || undefined });
       setSubmitted(true);
     } catch (e) {
       console.error("Feedback failed:", e);
