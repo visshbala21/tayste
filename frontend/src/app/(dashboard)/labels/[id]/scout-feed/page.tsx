@@ -20,6 +20,9 @@ export default async function ScoutFeedPage({
     api.getWatchlists(id),
   ]);
   const defaultWatchlistId = watchlists[0]?.id;
+  
+  // Only show filter options that are less than or equal to total results
+  const availableFilters = [20, 50, 100].filter((n) => feed.total >= n);
 
   return (
     <div>
@@ -54,18 +57,20 @@ export default async function ScoutFeedPage({
             </Link>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-2 text-xs text-muted">
-          <span>Show:</span>
-          {[20, 50, 100].map((n) => (
-            <Link
-              key={n}
-              href={`/labels/${id}/scout-feed?limit=${n}`}
-              className={`px-2 py-1 rounded ${limit === n ? "bg-primary/10 text-primary-light" : "bg-surface-light hover:text-gray-200"}`}
-            >
-              Top {n}
-            </Link>
-          ))}
-        </div>
+        {availableFilters.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+            <span>Show:</span>
+            {availableFilters.map((n) => (
+              <Link
+                key={n}
+                href={`/labels/${id}/scout-feed?limit=${n}`}
+                className={`px-2 py-1 rounded ${limit === n ? "bg-primary/10 text-primary-light" : "bg-surface-light hover:text-gray-200"}`}
+              >
+                Top {n}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <ScoutFeedClient
