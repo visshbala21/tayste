@@ -302,9 +302,10 @@ async def create_label(data: LabelCreate, user: User | None = Depends(get_option
 
 @router.get("/labels", response_model=list[LabelResponse])
 async def list_labels(user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Label).where(Label.user_id == user.id if user else True).order_by(Label.created_at.desc())
-    )
+    query = select(Label)
+    if user:
+        query = query.where(Label.user_id == user.id)
+    result = await db.execute(query.order_by(Label.created_at.desc()))
     return result.scalars().all()
 
 
