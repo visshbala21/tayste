@@ -37,6 +37,12 @@ export function ScoutFeedClient({
 
   // Initialize watchlistAdded Set by checking which artists are already in watchlists
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === "undefined") {
+      setCheckingWatchlists(false);
+      return;
+    }
+
     const checkWatchlists = async () => {
       if (watchlists.length === 0) {
         setCheckingWatchlists(false);
@@ -54,22 +60,25 @@ export function ScoutFeedClient({
               detail.items.forEach((item) => {
                 artistIdsInWatchlists.add(item.artist_id);
               });
-            } catch {
+            } catch (e) {
               // If we can't fetch a watchlist, skip it
+              console.error(`Failed to fetch watchlist ${watchlist.id}:`, e);
             }
           })
         );
 
         setWatchlistAdded(artistIdsInWatchlists);
-      } catch {
+      } catch (e) {
         // If checking fails, continue with empty set
+        console.error("Failed to check watchlists:", e);
       } finally {
         setCheckingWatchlists(false);
       }
     };
 
     checkWatchlists();
-  }, [labelId, watchlists]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labelId]); // Only depend on labelId, watchlists array reference may change
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {

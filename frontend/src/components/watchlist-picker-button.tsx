@@ -76,6 +76,12 @@ export function WatchlistPickerButton({
 
   // Check if artist is already in any watchlist
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === "undefined") {
+      setCheckingAdded(false);
+      return;
+    }
+
     const checkIfAdded = async () => {
       const watchlistsToCheck = watchlists && watchlists.length > 0 ? watchlists : listOptions;
       if (watchlistsToCheck.length === 0) {
@@ -93,19 +99,27 @@ export function WatchlistPickerButton({
               setCheckingAdded(false);
               return;
             }
-          } catch {
+          } catch (e) {
             // Continue checking other watchlists
+            console.error(`Failed to check watchlist ${watchlist.id}:`, e);
           }
         }
-      } catch {
+      } catch (e) {
         // If checking fails, assume not added
+        console.error("Failed to check if artist is in watchlist:", e);
       } finally {
         setCheckingAdded(false);
       }
     };
 
-    checkIfAdded();
-  }, [labelId, artistId, watchlists, listOptions]);
+    // Only check if we have watchlists and haven't already set added
+    if (!added && (watchlists?.length > 0 || listOptions.length > 0)) {
+      checkIfAdded();
+    } else {
+      setCheckingAdded(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labelId, artistId]); // Only depend on labelId and artistId to avoid infinite loops
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
