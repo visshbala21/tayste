@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, type WatchlistDetail, type WatchlistItem } from "@/lib/api";
 
 export function WatchlistDetailClient({ labelId, detail }: { labelId: string; detail: WatchlistDetail }) {
+  const router = useRouter();
   const [items, setItems] = useState<WatchlistItem[]>(detail.items);
 
   const remove = async (artistId: string) => {
     try {
       await api.removeFromWatchlist(labelId, detail.watchlist.id, artistId);
       setItems((prev) => prev.filter((i) => i.artist_id !== artistId));
+      router.refresh();
     } catch {
       // ignore
     }

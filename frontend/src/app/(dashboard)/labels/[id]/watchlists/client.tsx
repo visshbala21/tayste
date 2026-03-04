@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, type AlertItem, type Watchlist } from "@/lib/api";
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: Props) {
+  const router = useRouter();
   const [watchlists, setWatchlists] = useState<Watchlist[]>(initialWatchlists);
   const [alerts, setAlerts] = useState<AlertItem[]>(initialAlerts);
   const [name, setName] = useState("");
@@ -26,6 +28,7 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
       setWatchlists((prev) => [...prev, created]);
       setName("");
       setDesc("");
+      router.refresh();
     } finally {
       setCreating(false);
     }
@@ -35,6 +38,7 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
     try {
       await api.updateAlertStatus(labelId, alertId, status);
       setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+      router.refresh();
     } catch {
       // ignore
     }

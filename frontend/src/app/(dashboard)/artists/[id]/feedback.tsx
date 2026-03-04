@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { FeedbackAction } from "@/types";
 
@@ -20,6 +21,7 @@ export function ArtistFeedback({
   labelId: string;
   history: { action: string; notes?: string; created_at: string }[];
 }) {
+  const router = useRouter();
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ export function ArtistFeedback({
     try {
       await api.submitFeedback(labelId, { artist_id: artistId, action, notes: notes || undefined });
       setSubmitted(true);
+      router.refresh();
     } catch (e) {
       console.error("Feedback failed:", e);
     } finally {

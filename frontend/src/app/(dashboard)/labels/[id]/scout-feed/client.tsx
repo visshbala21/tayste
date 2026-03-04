@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, type ScoutFeedItem } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ export function ScoutFeedClient({
   pipelineStatus?: string;
   defaultWatchlistId?: string;
 }) {
+  const router = useRouter();
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
   const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set());
 
@@ -35,6 +37,7 @@ export function ScoutFeedClient({
     try {
       await api.submitFeedback(labelId, { artist_id: artistId, action });
       setFeedbackSent((prev) => new Set(prev).add(artistId));
+      router.refresh();
     } catch (e) {
       console.error("Feedback failed:", e);
     }
@@ -45,6 +48,7 @@ export function ScoutFeedClient({
     try {
       await api.addToWatchlist(labelId, defaultWatchlistId, { artist_id: artistId });
       setWatchlistAdded((prev) => new Set(prev).add(artistId));
+      router.refresh();
     } catch (e) {
       console.error("Watchlist add failed:", e);
     }

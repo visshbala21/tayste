@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 export function ArtistWatchlistButton({ labelId, artistId }: { labelId: string; artistId: string }) {
+  const router = useRouter();
   const [watchlistId, setWatchlistId] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,6 +30,7 @@ export function ArtistWatchlistButton({ labelId, artistId }: { labelId: string; 
     try {
       await api.addToWatchlist(labelId, watchlistId, { artist_id: artistId });
       setAdded(true);
+      router.refresh();
     } finally {
       setLoading(false);
     }
