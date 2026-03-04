@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await auth();
+  const isLoggedIn = !!session?.backendToken;
+
   return (
     <div className="relative min-h-screen overflow-hidden grid-bg flex flex-col">
       {/* Ambient glow layers */}
@@ -13,17 +17,26 @@ export default function LandingPage() {
           Tayste
         </span>
         <div className="flex items-center gap-4 animate-fade-in delay-300">
-          <Link
-            href="/login"
-            className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
-          >
-            Sign In
-          </Link>
+          {isLoggedIn ? (
+            <Link
+              href="/dashboard"
+              className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
+            >
+              Sign In
+            </Link>
+          )}
           <Link
             href="/dashboard"
             className="btn-glow text-sm bg-primary/10 text-primary-light border border-primary/30 px-4 py-2 rounded-lg"
           >
-            Get Started
+            {isLoggedIn ? "Go to Dashboard" : "Get Started"}
           </Link>
         </div>
       </nav>
