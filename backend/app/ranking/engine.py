@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import (
     LabelCluster, Embedding, ArtistFeature, Recommendation,
-    Artist, RosterMembership, PlatformAccount
+    Artist, RosterMembership, PlatformAccount, LabelArtistState
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
@@ -145,6 +145,20 @@ def _passes_soft_backfill_gate(
     return fit_score >= 0.38
 
 
+def _max_normalized_similarity(
+    artist_vec: np.ndarray,
+    reference_vectors: list[np.ndarray],
+) -> float:
+    if not reference_vectors:
+        return 0.0
+    best_sim = -1.0
+    for reference in reference_vectors:
+        sim = cosine_similarity(artist_vec, reference)
+        if sim > best_sim:
+            best_sim = sim
+    return _normalized_cosine(best_sim)
+
+
 async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendation]:
     """Score and rank candidate artists for a label."""
     batch_id = new_uuid()
@@ -189,6 +203,24 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
     if not candidate_ids:
         return []
 
+    # Label feedback/stage state used to learn from A&R actions.
+    result = await db.execute(
+        select(LabelArtistState.artist_id, LabelArtistState.stage).where(
+            LabelArtistState.label_id == label_id
+        )
+    )
+    stage_by_artist: dict[str, str] = {artist_id: stage for artist_id, stage in result.all()}
+    positive_feedback_ids = [
+        artist_id
+        for artist_id, stage in stage_by_artist.items()
+        if stage in {"shortlist", "sign"}
+    ]
+    negative_feedback_ids = [
+        artist_id
+        for artist_id, stage in stage_by_artist.items()
+        if stage in {"pass", "archive"}
+    ]
+
     # Candidate platform metadata (career stage + latest discovery scale hints).
     result = await db.execute(
         select(
@@ -216,6 +248,32 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         if emb.artist_id not in candidate_embeddings or emb.provider == "metric":
             candidate_embeddings[emb.artist_id] = emb
 
+    # Build feedback reference vectors (learn taste from explicit A&R decisions).
+    feedback_reference_ids = list(set(positive_feedback_ids + negative_feedback_ids))
+    positive_feedback_vectors: list[np.ndarray] = []
+    negative_feedback_vectors: list[np.ndarray] = []
+    if feedback_reference_ids:
+        result = await db.execute(
+            select(Embedding).where(
+                Embedding.artist_id.in_(feedback_reference_ids),
+                Embedding.provider.in_(["metric", "fallback"]),
+            )
+        )
+        feedback_embeddings: dict[str, Embedding] = {}
+        for emb in result.scalars().all():
+            if emb.artist_id not in feedback_embeddings or emb.provider == "metric":
+                feedback_embeddings[emb.artist_id] = emb
+        positive_feedback_vectors = [
+            np.array(feedback_embeddings[artist_id].vector)
+            for artist_id in positive_feedback_ids
+            if artist_id in feedback_embeddings
+        ]
+        negative_feedback_vectors = [
+            np.array(feedback_embeddings[artist_id].vector)
+            for artist_id in negative_feedback_ids
+            if artist_id in feedback_embeddings
+        ]
+
     # Preload latest features for candidates.
     result = await db.execute(
         select(ArtistFeature).where(ArtistFeature.artist_id.in_(candidate_ids))
@@ -233,6 +291,10 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
 
     for artist in candidates:
         if artist.id in globally_rostered_ids:
+            continue
+        stage = stage_by_artist.get(artist.id)
+        # Already decided artists shouldn't keep resurfacing in ranked output.
+        if stage in {"pass", "archive", "sign"}:
             continue
 
         emb = candidate_embeddings.get(artist.id)
@@ -337,7 +399,15 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             + scale * policy.scale_weight
         )
         denom = max(policy.fit_weight + policy.momentum_weight + policy.scale_weight, 1e-6)
-        final_score = (weighted_sum / denom) - (risk * policy.risk_weight)
+        feedback_positive_similarity = _max_normalized_similarity(artist_vec, positive_feedback_vectors)
+        feedback_negative_similarity = _max_normalized_similarity(artist_vec, negative_feedback_vectors)
+        feedback_delta = (0.15 * feedback_positive_similarity) - (0.12 * feedback_negative_similarity)
+        if stage == "shortlist":
+            feedback_delta = max(feedback_delta, 0.18)
+        elif stage == "review":
+            feedback_delta = max(feedback_delta, 0.08)
+
+        final_score = (weighted_sum / denom) - (risk * policy.risk_weight) + feedback_delta
         final_score = max(0.0, min(1.0, final_score))
 
         payload = {
@@ -363,13 +433,22 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
                 "formula": "((fit*w_fit + momentum*w_momentum + scale*w_scale)/sum_w) - risk*w_risk",
                 "emerging_gate": emerging_gate,
                 "emerging_reasons": list(emerging.reasons),
+                "label_feedback": {
+                    "stage": stage,
+                    "positive_similarity": round(feedback_positive_similarity, 4),
+                    "negative_similarity": round(feedback_negative_similarity, 4),
+                    "delta": round(feedback_delta, 4),
+                },
             },
         }
         if fallback_metrics:
             payload["score_breakdown"]["fallback"] = True
             payload["score_breakdown"]["note"] = "No recent features; using strict conservative defaults"
 
-        if emerging_gate == "strict" and _passes_quality_gate(features, policy):
+        if stage == "shortlist":
+            payload["score_breakdown"]["note"] = "Forced include: previously shortlisted by label"
+            qualified_payloads.append(payload)
+        elif emerging_gate == "strict" and _passes_quality_gate(features, policy):
             qualified_payloads.append(payload)
         elif emerging_gate == "strict":
             fallback_payloads.append(payload)
