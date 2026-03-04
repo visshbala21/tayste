@@ -30,6 +30,7 @@ export function WatchlistPickerButton({
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [added, setAdded] = useState(false);
+  const [checkingAdded, setCheckingAdded] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +74,39 @@ export function WatchlistPickerButton({
     };
   }, [defaultWatchlistId, labelId, selectedWatchlistId, watchlists]);
 
+  // Check if artist is already in any watchlist
+  useEffect(() => {
+    const checkIfAdded = async () => {
+      const watchlistsToCheck = watchlists && watchlists.length > 0 ? watchlists : listOptions;
+      if (watchlistsToCheck.length === 0) {
+        setCheckingAdded(false);
+        return;
+      }
+
+      try {
+        // Check all watchlists to see if artist is in any of them
+        for (const watchlist of watchlistsToCheck) {
+          try {
+            const detail = await api.getWatchlist(labelId, watchlist.id);
+            if (detail.items.some((item) => item.artist_id === artistId)) {
+              setAdded(true);
+              setCheckingAdded(false);
+              return;
+            }
+          } catch {
+            // Continue checking other watchlists
+          }
+        }
+      } catch {
+        // If checking fails, assume not added
+      } finally {
+        setCheckingAdded(false);
+      }
+    };
+
+    checkIfAdded();
+  }, [labelId, artistId, watchlists, listOptions]);
+
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (!rootRef.current) return;
@@ -111,7 +145,7 @@ export function WatchlistPickerButton({
     return <span className="text-xs text-accent px-3 py-1">Watching</span>;
   }
 
-  if (loadingLists && listOptions.length === 0) {
+  if (checkingAdded || (loadingLists && listOptions.length === 0)) {
     return (
       <button
         type="button"

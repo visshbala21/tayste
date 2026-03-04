@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api, type ScoutFeedItem, type Watchlist } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
@@ -33,6 +33,43 @@ export function ScoutFeedClient({
   const router = useRouter();
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
   const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set());
+  const [checkingWatchlists, setCheckingWatchlists] = useState(true);
+
+  // Initialize watchlistAdded Set by checking which artists are already in watchlists
+  useEffect(() => {
+    const checkWatchlists = async () => {
+      if (watchlists.length === 0) {
+        setCheckingWatchlists(false);
+        return;
+      }
+
+      try {
+        const artistIdsInWatchlists = new Set<string>();
+        
+        // Check all watchlists to see which artists are already in them
+        await Promise.all(
+          watchlists.map(async (watchlist) => {
+            try {
+              const detail = await api.getWatchlist(labelId, watchlist.id);
+              detail.items.forEach((item) => {
+                artistIdsInWatchlists.add(item.artist_id);
+              });
+            } catch {
+              // If we can't fetch a watchlist, skip it
+            }
+          })
+        );
+
+        setWatchlistAdded(artistIdsInWatchlists);
+      } catch {
+        // If checking fails, continue with empty set
+      } finally {
+        setCheckingWatchlists(false);
+      }
+    };
+
+    checkWatchlists();
+  }, [labelId, watchlists]);
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {
