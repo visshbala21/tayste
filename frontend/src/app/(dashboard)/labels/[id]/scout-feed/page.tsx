@@ -17,7 +17,6 @@ export default async function ScoutFeedPage({
     api.getLabel(id),
     api.getWatchlists(id),
   ]);
-  const defaultWatchlistId = watchlists[0]?.id;
   
   // Only show filter options that are less than or equal to total results
   const availableFilters = [20, 50, 100].filter((n) => feed.total >= n);
@@ -75,7 +74,7 @@ export default async function ScoutFeedPage({
         items={feed.items}
         labelId={id}
         pipelineStatus={label.pipeline_status}
-        defaultWatchlistId={defaultWatchlistId}
+        watchlists={watchlists}
       />
     </div>
   );

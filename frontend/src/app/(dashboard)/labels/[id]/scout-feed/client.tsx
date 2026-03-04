@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type ScoutFeedItem } from "@/lib/api";
+import { api, type ScoutFeedItem, type Watchlist } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
+import { WatchlistPickerButton } from "@/components/watchlist-picker-button";
 
 function ScoreBar({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -22,12 +23,12 @@ export function ScoutFeedClient({
   items,
   labelId,
   pipelineStatus,
-  defaultWatchlistId,
+  watchlists,
 }: {
   items: ScoutFeedItem[];
   labelId: string;
   pipelineStatus?: string;
-  defaultWatchlistId?: string;
+  watchlists: Watchlist[];
 }) {
   const router = useRouter();
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
@@ -40,17 +41,6 @@ export function ScoutFeedClient({
       router.refresh();
     } catch (e) {
       console.error("Feedback failed:", e);
-    }
-  };
-
-  const addToWatchlist = async (artistId: string) => {
-    if (!defaultWatchlistId) return;
-    try {
-      await api.addToWatchlist(labelId, defaultWatchlistId, { artist_id: artistId });
-      setWatchlistAdded((prev) => new Set(prev).add(artistId));
-      router.refresh();
-    } catch (e) {
-      console.error("Watchlist add failed:", e);
     }
   };
 
@@ -173,15 +163,21 @@ export function ScoutFeedClient({
                   </button>
                 </>
               )}
-              {defaultWatchlistId && (
-                watchlistAdded.has(item.artist_id) ? (
-                  <span className="text-xs text-accent px-3 py-1">Watching</span>
-                ) : (
-                  <button onClick={() => addToWatchlist(item.artist_id)}
-                    className="text-xs bg-accent/10 text-accent px-3 py-1 rounded hover:bg-accent/20 transition-all duration-200">
-                    Watch
-                  </button>
-                )
+              {watchlistAdded.has(item.artist_id) ? (
+                <span className="text-xs text-accent px-3 py-1">Watching</span>
+              ) : (
+                <WatchlistPickerButton
+                  labelId={labelId}
+                  artistId={item.artist_id}
+                  watchlists={watchlists}
+                  defaultWatchlistId={watchlists[0]?.id}
+                  buttonClassName="text-xs bg-accent/10 text-accent px-3 py-1 rounded hover:bg-accent/20 transition-all duration-200"
+                  buttonLabel="Watch"
+                  onAdded={() => {
+                    setWatchlistAdded((prev) => new Set(prev).add(item.artist_id));
+                    router.refresh();
+                  }}
+                />
               )}
             </div>
           </div>
