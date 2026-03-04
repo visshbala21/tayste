@@ -1,20 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  let user: { name?: string | null; picture?: string | null } | null = null;
-  let isAuthenticated = false;
-
-  try {
-    const session = await auth();
-    if (session?.backendToken) {
-      isAuthenticated = true;
-      user = session.backendUser;
-    }
-  } catch {
-    // auth() may fail — continue without auth
+  const session = await auth();
+  if (!session?.backendToken) {
+    redirect("/login");
   }
+
+  const user = session.backendUser;
 
   return (
     <>
@@ -32,42 +27,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
           </div>
           <div className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                {user?.picture && (
-                  <Image
-                    src={user.picture}
-                    alt={user.name || "User"}
-                    width={28}
-                    height={28}
-                    className="rounded-full"
-                  />
-                )}
-                {user?.name && (
-                  <span className="text-sm text-gray-300 hidden sm:inline">{user.name}</span>
-                )}
-                <form
-                  action={async () => {
-                    "use server";
-                    await signOut({ redirectTo: "/" });
-                  }}
-                >
-                  <button
-                    type="submit"
-                    className="text-xs text-muted hover:text-gray-200 border border-border px-3 py-1.5 rounded-lg transition-all duration-200"
-                  >
-                    Sign out
-                  </button>
-                </form>
-              </>
-            ) : (
-              <Link
-                href="/login"
+            {user?.picture && (
+              <Image
+                src={user.picture}
+                alt={user.name || "User"}
+                width={28}
+                height={28}
+                className="rounded-full"
+              />
+            )}
+            {user?.name && (
+              <span className="text-sm text-gray-300 hidden sm:inline">{user.name}</span>
+            )}
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/" });
+              }}
+            >
+              <button
+                type="submit"
                 className="text-xs text-muted hover:text-gray-200 border border-border px-3 py-1.5 rounded-lg transition-all duration-200"
               >
-                Sign in
-              </Link>
-            )}
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       </nav>
