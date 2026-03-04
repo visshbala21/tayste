@@ -9,20 +9,34 @@ export function ArtistWatchlistButton({ labelId, artistId }: { labelId: string; 
   const [watchlistId, setWatchlistId] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.getWatchlists(labelId);
-        if (data && data.length > 0) {
-          setWatchlistId(data[0].id);
+        const watchlists = await api.getWatchlists(labelId);
+        if (watchlists && watchlists.length > 0) {
+          const defaultWatchlistId = watchlists[0].id;
+          setWatchlistId(defaultWatchlistId);
+          
+          // Check if artist is already in the watchlist
+          try {
+            const watchlistDetail = await api.getWatchlist(labelId, defaultWatchlistId);
+            const isInWatchlist = watchlistDetail.items.some(item => item.artist_id === artistId);
+            setAdded(isInWatchlist);
+          } catch {
+            // If we can't check, assume not added
+            setAdded(false);
+          }
         }
       } catch {
         // ignore
+      } finally {
+        setChecking(false);
       }
     };
     load();
-  }, [labelId]);
+  }, [labelId, artistId]);
 
   const add = async () => {
     if (!watchlistId || loading) return;
@@ -36,7 +50,7 @@ export function ArtistWatchlistButton({ labelId, artistId }: { labelId: string; 
     }
   };
 
-  if (!watchlistId) return null;
+  if (!watchlistId || checking) return null;
 
   return (
     <button
