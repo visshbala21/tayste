@@ -113,7 +113,7 @@ export function WatchlistPickerButton({
     };
 
     // Only check if we have watchlists and haven't already set added
-    if (!added && (watchlists?.length > 0 || listOptions.length > 0)) {
+    if (!added && ((watchlists && watchlists.length > 0) || listOptions.length > 0)) {
       checkIfAdded();
     } else {
       setCheckingAdded(false);

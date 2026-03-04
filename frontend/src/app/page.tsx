@@ -2,8 +2,15 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 
 export default async function LandingPage() {
-  const session = await auth();
-  const isLoggedIn = !!session?.backendToken;
+  let isLoggedIn = false;
+  try {
+    const session = await auth();
+    isLoggedIn = !!session?.backendToken;
+  } catch (error) {
+    // If auth check fails, assume not logged in
+    console.error("Auth check failed:", error);
+    isLoggedIn = false;
+  }
 
   return (
     <div className="relative min-h-screen overflow-hidden grid-bg flex flex-col">
