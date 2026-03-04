@@ -55,7 +55,7 @@ def _format_growth(value: float | None) -> str | None:
 
 async def _ensure_default_watchlist(db: AsyncSession, label_id: str) -> Watchlist:
     result = await db.execute(
-        select(Watchlist).where(Watchlist.label_id == label_id)
+        select(Watchlist).where(Watchlist.label_id == label_id).limit(1)
     )
     watchlist = result.scalar_one_or_none()
     if watchlist:
