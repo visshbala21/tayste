@@ -69,7 +69,7 @@ async def generate_artist_brief(
             ArtistLLMBrief.input_hash == input_hash,
         )
     )
-    cached = result.scalar_one_or_none()
+    cached = result.scalars().first()
     if cached:
         try:
             return ArtistBriefOutput.model_validate(cached.brief)

@@ -8,6 +8,8 @@ declare module "next-auth" {
       email: string;
       name: string | null;
       picture: string | null;
+      email_verified: boolean;
+      auth_provider: string;
     };
   }
 }
@@ -20,6 +22,8 @@ declare module "next-auth/jwt" {
       email: string;
       name: string | null;
       picture: string | null;
+      email_verified: boolean;
+      auth_provider: string;
     };
   }
 }

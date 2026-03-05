@@ -21,13 +21,30 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    google_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    google_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     name: Mapped[Optional[str]] = mapped_column(String(255))
     picture: Mapped[Optional[str]] = mapped_column(String(512))
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    auth_provider: Mapped[str] = mapped_column(String(20), default="email")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     labels: Mapped[List["Label"]] = relationship(back_populates="owner")
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    token_type: Mapped[str] = mapped_column(String(20), nullable=False)  # verify_email, reset_password
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship()
 
 
 class Label(Base, TimestampMixin):

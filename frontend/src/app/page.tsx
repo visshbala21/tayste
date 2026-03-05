@@ -32,12 +32,20 @@ export default async function LandingPage() {
               Dashboard
             </Link>
           ) : (
-            <Link
-              href="/login"
-              className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
-            >
-              Sign In
-            </Link>
+            <>
+              <Link
+                href="/login"
+                className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/signup"
+                className="text-sm text-muted hover:text-gray-200 transition-colors duration-300"
+              >
+                Sign Up
+              </Link>
+            </>
           )}
           <Link
             href="/dashboard"

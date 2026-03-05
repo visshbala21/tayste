@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     frontend_url: str = "http://localhost:3000"
 
+    # Email (Resend)
+    resend_api_key: str = ""
+    from_email: str = "noreply@tayste.app"
+    email_verification_expiry_hours: int = 24
+    password_reset_expiry_hours: int = 1
+
     # Ranking weights
     fit_weight: float = 1.0
     momentum_weight: float = 1.0
