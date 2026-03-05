@@ -126,6 +126,9 @@ export interface ScoutFeedItem {
   score_breakdown?: Record<string, unknown>;
   reasons?: string[];
   stage?: string;
+  cultural_energy?: number;
+  breakout_candidate?: boolean;
+  cultural_highlights?: string[];
 }
 
 export interface ScoutFeed {
@@ -191,6 +194,50 @@ export interface ArtistDetail {
   };
   feedback_history?: { action: string; notes?: string; created_at: string }[];
   label_stage?: string;
+  cultural_profile?: CulturalProfile;
+}
+
+export interface CulturalProfile {
+  cultural_energy?: number;
+  sentiment?: {
+    distribution?: Record<string, number>;
+    dominant?: string;
+    strength?: number;
+  };
+  engagement?: {
+    density_normalized?: number;
+    platforms_sampled?: string[];
+  };
+  superfans?: {
+    density_normalized?: number;
+  };
+  cross_platform?: {
+    platforms_with_mentions?: string[];
+    platform_count?: number;
+    normalized?: number;
+  };
+  cultural_identity?: {
+    themes?: { label: string; confidence: number; evidence_count: number; sample_evidence: string }[];
+    thematic_clarity?: number;
+  };
+  persona?: {
+    interaction_style?: string;
+    summary?: string;
+  };
+  polarization?: {
+    index?: number;
+    description?: string;
+  };
+  evidence_snippets?: { text: string; platform: string; sentiment: string }[];
+  breakout_signals?: {
+    is_breakout_candidate?: boolean;
+    reasons?: string[];
+  };
+  fan_community?: string;
+  scores?: {
+    cultural_energy?: number;
+    sub_scores?: Record<string, number>;
+  };
 }
 
 export interface RosterImportPayload {

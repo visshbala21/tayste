@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     email_verification_expiry_hours: int = 24
     password_reset_expiry_hours: int = 1
 
+    # Cultural signals
+    cultural_max_videos_per_artist: int = 5
+    cultural_max_comments_per_video: int = 200
+    cultural_signal_refresh_days_hot: int = 1
+    cultural_signal_refresh_days_stable: int = 7
+
     # Ranking weights
     fit_weight: float = 1.0
     momentum_weight: float = 1.0

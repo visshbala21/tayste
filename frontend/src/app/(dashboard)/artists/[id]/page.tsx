@@ -159,6 +159,135 @@ export default async function ArtistDetailPage({
         </div>
       )}
 
+      {/* Cultural Profile */}
+      {artist.cultural_profile && (
+        <div className="bg-surface border border-violet-500/20 rounded-lg p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-violet-400">Cultural Profile</h2>
+            {artist.cultural_profile.breakout_signals?.is_breakout_candidate && (
+              <span className="text-xs bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded font-medium">
+                Breakout Signal
+              </span>
+            )}
+          </div>
+
+          {/* Cultural Energy + Sub-scores */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+            <div className="bg-surface-light rounded-lg p-3">
+              <p className="text-xs text-muted mb-1">Cultural Energy</p>
+              <p className="text-xl font-bold font-mono text-violet-400">
+                {((artist.cultural_profile.scores?.cultural_energy ?? 0) * 100).toFixed(0)}
+              </p>
+            </div>
+            {artist.cultural_profile.scores?.sub_scores && (
+              <>
+                {artist.cultural_profile.scores.sub_scores.sentiment_strength != null && (
+                  <div className="bg-surface-light rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Sentiment</p>
+                    <p className="text-lg font-bold font-mono text-gray-200">
+                      {(artist.cultural_profile.scores.sub_scores.sentiment_strength * 100).toFixed(0)}
+                    </p>
+                  </div>
+                )}
+                {artist.cultural_profile.scores.sub_scores.engagement_density != null && (
+                  <div className="bg-surface-light rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Engagement</p>
+                    <p className="text-lg font-bold font-mono text-gray-200">
+                      {(artist.cultural_profile.scores.sub_scores.engagement_density * 100).toFixed(0)}
+                    </p>
+                  </div>
+                )}
+                {artist.cultural_profile.scores.sub_scores.superfan_density != null && (
+                  <div className="bg-surface-light rounded-lg p-3">
+                    <p className="text-xs text-muted mb-1">Superfans</p>
+                    <p className="text-lg font-bold font-mono text-gray-200">
+                      {(artist.cultural_profile.scores.sub_scores.superfan_density * 100).toFixed(0)}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Cultural Themes */}
+          {artist.cultural_profile.cultural_identity?.themes && artist.cultural_profile.cultural_identity.themes.length > 0 && (
+            <div className="mb-5">
+              <h3 className="text-sm font-semibold text-muted mb-2">Cultural Themes</h3>
+              <div className="space-y-2">
+                {artist.cultural_profile.cultural_identity.themes.map((theme) => (
+                  <div key={theme.label} className="flex items-center gap-3">
+                    <span className="text-xs bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded min-w-fit">
+                      {theme.label}
+                    </span>
+                    <div className="flex-1 h-1.5 bg-surface-light rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-violet-500" style={{ width: `${theme.confidence * 100}%` }} />
+                    </div>
+                    <span className="text-xs text-muted italic truncate max-w-[200px]">&ldquo;{theme.sample_evidence}&rdquo;</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Fan Community + Persona */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            {artist.cultural_profile.fan_community && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted mb-1">Fan Community</h3>
+                <p className="text-gray-300 text-sm">{artist.cultural_profile.fan_community}</p>
+              </div>
+            )}
+            {artist.cultural_profile.persona?.summary && (
+              <div>
+                <h3 className="text-sm font-semibold text-muted mb-1">Artist Persona</h3>
+                <p className="text-gray-300 text-sm">{artist.cultural_profile.persona.summary}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Evidence Snippets */}
+          {artist.cultural_profile.evidence_snippets && artist.cultural_profile.evidence_snippets.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-muted mb-2">Fan Voices</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {artist.cultural_profile.evidence_snippets.slice(0, 6).map((snippet, i) => (
+                  <div key={i} className="bg-surface-light rounded p-3 text-sm">
+                    <p className="text-gray-300 italic">&ldquo;{snippet.text}&rdquo;</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted">{snippet.platform}</span>
+                      <span className={`text-xs ${
+                        snippet.sentiment === "very_positive" ? "text-success" :
+                        snippet.sentiment === "positive" ? "text-success/70" :
+                        snippet.sentiment === "critical" ? "text-warning" :
+                        snippet.sentiment === "negative" ? "text-danger" : "text-muted"
+                      }`}>
+                        {snippet.sentiment}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Breakout Reasons */}
+          {artist.cultural_profile.breakout_signals?.is_breakout_candidate &&
+           artist.cultural_profile.breakout_signals.reasons &&
+           artist.cultural_profile.breakout_signals.reasons.length > 0 && (
+            <div className="mt-4 bg-violet-500/5 border border-violet-500/20 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-violet-400 mb-2">Breakout Indicators</h3>
+              <ul className="space-y-1">
+                {artist.cultural_profile.breakout_signals.reasons.map((reason, i) => (
+                  <li key={i} className="text-sm text-gray-300 flex gap-2">
+                    <span className="text-violet-400">&#8594;</span> {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Charts */}
       {artist.snapshots.length > 0 && (
         <div className="bg-surface border border-border rounded-lg p-6 mb-6">

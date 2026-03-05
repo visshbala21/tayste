@@ -143,6 +143,11 @@ export function ScoutFeedClient({
                 <span className={`text-sm font-mono font-bold ${scoreColor(item.final_score)}`}>
                   {(item.final_score * 100).toFixed(0)}
                 </span>
+                {item.breakout_candidate && (
+                  <span className="text-xs bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded font-medium">
+                    Breakout Signal
+                  </span>
+                )}
                 {item.stage && (
                   <span className="text-xs bg-surface-light text-muted px-2 py-0.5 rounded">
                     {item.stage}
@@ -150,18 +155,24 @@ export function ScoutFeedClient({
                 )}
               </div>
 
-              {item.genre_tags && (
+              {(item.genre_tags || item.cultural_highlights) && (
                 <div className="flex flex-wrap gap-1 mb-3">
-                  {item.genre_tags.map((g) => (
+                  {item.genre_tags?.map((g) => (
                     <span key={g} className="text-xs bg-surface-light text-gray-400 px-2 py-0.5 rounded">{g}</span>
+                  ))}
+                  {item.cultural_highlights?.map((h) => (
+                    <span key={h} className="text-xs bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded">{h}</span>
                   ))}
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className={`grid ${item.cultural_energy != null ? "grid-cols-4" : "grid-cols-3"} gap-3 mb-3`}>
                 <ScoreBar label="Fit" value={item.fit_score} color="bg-primary" />
                 <ScoreBar label="Mom." value={item.momentum_score} color="bg-accent" />
                 <ScoreBar label="Risk" value={item.risk_score} color="bg-danger" />
+                {item.cultural_energy != null && (
+                  <ScoreBar label="Culture" value={item.cultural_energy} color="bg-violet-500" />
+                )}
               </div>
 
               {item.reasons && item.reasons.length > 0 && (

@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import (
     LabelCluster, Embedding, ArtistFeature, Recommendation,
-    Artist, RosterMembership, PlatformAccount, LabelArtistState
+    Artist, RosterMembership, PlatformAccount, LabelArtistState,
+    ArtistCulturalProfile,
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
@@ -18,6 +19,7 @@ class RankingPolicy:
     momentum_weight: float
     scale_weight: float
     risk_weight: float
+    cultural_weight: float
     min_growth_7d: float
     min_growth_30d: float
     min_momentum: float
@@ -36,6 +38,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
             momentum_weight=0.45,
             scale_weight=0.10,
             risk_weight=0.35,
+            cultural_weight=0.30,
             min_growth_7d=0.01,
             min_growth_30d=0.04,
             min_momentum=0.18,
@@ -51,6 +54,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
             momentum_weight=0.30,
             scale_weight=0.15,
             risk_weight=0.30,
+            cultural_weight=0.20,
             min_growth_7d=0.005,
             min_growth_30d=0.02,
             min_momentum=0.10,
@@ -65,6 +69,7 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
         momentum_weight=0.15,
         scale_weight=0.20,
         risk_weight=0.25,
+        cultural_weight=0.10,
         min_growth_7d=0.0,
         min_growth_30d=0.0,
         min_momentum=0.0,
@@ -284,6 +289,17 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         if feat.artist_id not in latest_features:
             latest_features[feat.artist_id] = feat
 
+    # Preload latest cultural profiles for candidates.
+    result = await db.execute(
+        select(ArtistCulturalProfile).where(
+            ArtistCulturalProfile.artist_id.in_(candidate_ids)
+        ).order_by(ArtistCulturalProfile.computed_at.desc())
+    )
+    cultural_profiles: dict[str, ArtistCulturalProfile] = {}
+    for cp in result.scalars().all():
+        if cp.artist_id not in cultural_profiles:
+            cultural_profiles[cp.artist_id] = cp
+
     cluster_centroids = [(cluster.id, np.array(cluster.centroid)) for cluster in clusters]
     qualified_payloads: list[dict] = []
     fallback_payloads: list[dict] = []
@@ -393,12 +409,24 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         risk = max(0.0, min(1.0, float(risk or 0.0)))
         scale = _scale_score(features)
 
+        # Cultural energy integration
+        cp = cultural_profiles.get(artist.id)
+        cultural_energy = float(cp.cultural_energy or 0.0) if cp else 0.0
+        breakout_boost = 0.10 if (cp and cp.breakout_candidate) else 0.0
+
         weighted_sum = (
             fit_score * policy.fit_weight
             + momentum * policy.momentum_weight
             + scale * policy.scale_weight
         )
-        denom = max(policy.fit_weight + policy.momentum_weight + policy.scale_weight, 1e-6)
+        denom = policy.fit_weight + policy.momentum_weight + policy.scale_weight
+
+        # Only include cultural weight in formula if data exists
+        if cultural_energy > 0.0:
+            weighted_sum += cultural_energy * policy.cultural_weight
+            denom += policy.cultural_weight
+
+        denom = max(denom, 1e-6)
         feedback_positive_similarity = _max_normalized_similarity(artist_vec, positive_feedback_vectors)
         feedback_negative_similarity = _max_normalized_similarity(artist_vec, negative_feedback_vectors)
         feedback_delta = (0.15 * feedback_positive_similarity) - (0.12 * feedback_negative_similarity)
@@ -407,7 +435,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
         elif stage == "review":
             feedback_delta = max(feedback_delta, 0.08)
 
-        final_score = (weighted_sum / denom) - (risk * policy.risk_weight) + feedback_delta
+        final_score = (weighted_sum / denom) - (risk * policy.risk_weight) + feedback_delta + breakout_boost
         final_score = max(0.0, min(1.0, final_score))
 
         payload = {
@@ -430,7 +458,10 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
                     "scale": policy.scale_weight,
                     "risk": policy.risk_weight,
                 },
-                "formula": "((fit*w_fit + momentum*w_momentum + scale*w_scale)/sum_w) - risk*w_risk",
+                "cultural_energy": round(cultural_energy, 4),
+                "cultural_weight": policy.cultural_weight if cultural_energy > 0 else 0.0,
+                "breakout_boost": round(breakout_boost, 4),
+                "formula": "((fit*w_fit + momentum*w_mom + scale*w_scale + cultural*w_cultural)/sum_w) - risk*w_risk + breakout",
                 "emerging_gate": emerging_gate,
                 "emerging_reasons": list(emerging.reasons),
                 "label_feedback": {

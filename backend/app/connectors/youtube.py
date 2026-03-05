@@ -165,6 +165,58 @@ class YouTubeConnector:
                 })
             return results
 
+    async def get_video_comments(
+        self, video_id: str, max_results: int = 100, page_token: str | None = None
+    ) -> dict:
+        """Get top-level comments for a video.
+        Returns {comments: [{comment_id, text, author_hash, like_count, reply_count}], next_page_token}.
+        """
+        import hashlib
+
+        if not self.available:
+            return {"comments": [], "next_page_token": None}
+
+        async with httpx.AsyncClient() as client:
+            params = {
+                "key": self.api_key,
+                "videoId": video_id,
+                "part": "snippet",
+                "maxResults": min(max_results, 100),
+                "order": "relevance",
+                "textFormat": "plainText",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+
+            resp = await client.get(f"{YOUTUBE_API_BASE}/commentThreads", params=params)
+
+            if resp.status_code in (403, 404):
+                # Comments disabled or video not found
+                return {"comments": [], "next_page_token": None}
+            if resp.status_code == 429:
+                raise httpx.HTTPStatusError(
+                    "YouTube quota exceeded", request=resp.request, response=resp,
+                )
+            resp.raise_for_status()
+            data = resp.json()
+
+            comments = []
+            for item in data.get("items", []):
+                snippet = item["snippet"]["topLevelComment"]["snippet"]
+                author_id = snippet.get("authorChannelId", {}).get("value", "")
+                comments.append({
+                    "comment_id": item["id"],
+                    "text": snippet.get("textDisplay", ""),
+                    "author_hash": hashlib.sha256(author_id.encode()).hexdigest()[:16] if author_id else "",
+                    "like_count": snippet.get("likeCount", 0),
+                    "reply_count": item["snippet"].get("totalReplyCount", 0),
+                })
+
+            return {
+                "comments": comments,
+                "next_page_token": data.get("nextPageToken"),
+            }
+
     def _mock_search(self, query: str, max_results: int) -> list[dict]:
         """Return mock data when API key not available."""
         return []

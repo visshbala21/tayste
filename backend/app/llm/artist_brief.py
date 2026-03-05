@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.llm.client import llm_client, hash_input
 from app.api.schemas import ArtistBriefOutput
-from app.models.tables import Artist, ArtistLLMBrief, ArtistFeature, Snapshot, Recommendation
+from app.models.tables import Artist, ArtistLLMBrief, ArtistFeature, Snapshot, Recommendation, ArtistCulturalProfile
 from app.models.base import new_uuid
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,14 @@ async def generate_artist_brief(
         )
         rec = result.scalar_one_or_none()
 
+    # Get cultural profile if available
+    result = await db.execute(
+        select(ArtistCulturalProfile).where(
+            ArtistCulturalProfile.artist_id == artist_id
+        ).order_by(ArtistCulturalProfile.computed_at.desc()).limit(1)
+    )
+    cultural = result.scalars().first()
+
     input_data = {
         "artist_name": artist.name,
         "genres": artist.genre_tags,
@@ -58,6 +66,8 @@ async def generate_artist_brief(
         "risk_flags": features.risk_flags if features else [],
         "fit_score": rec.fit_score if rec else None,
         "momentum_score": features.momentum_score if features else None,
+        "cultural_energy": cultural.cultural_energy if cultural else None,
+        "breakout_candidate": cultural.breakout_candidate if cultural else False,
     }
 
     input_hash = hash_input(input_data)
@@ -76,6 +86,32 @@ async def generate_artist_brief(
         except Exception:
             pass
 
+    # Build cultural context section
+    cultural_section = ""
+    if cultural and cultural.cultural_profile:
+        cp = cultural.cultural_profile
+        themes = [t["label"] for t in cp.get("cultural_identity", {}).get("themes", [])]
+        snippets = [s["text"] for s in cp.get("evidence_snippets", [])[:3]]
+        cultural_section = f"""
+Cultural Signal Data:
+- Cultural Energy Score: {cultural.cultural_energy:.2f}
+- Fan Sentiment: {cultural.sentiment_distribution}
+- Cultural Themes: {', '.join(themes) if themes else 'N/A'}
+- Engagement Density: {cultural.engagement_density:.2f}
+- Superfan Density: {cultural.superfan_density:.2f}
+- Breakout Candidate: {'Yes' if cultural.breakout_candidate else 'No'}
+- Key Fan Comments: {'; '.join(snippets) if snippets else 'N/A'}
+"""
+    elif cultural:
+        cultural_section = f"""
+Cultural Signal Data:
+- Cultural Energy Score: {cultural.cultural_energy:.2f}
+- Fan Sentiment: {cultural.sentiment_distribution}
+- Engagement Density: {cultural.engagement_density:.2f}
+- Superfan Density: {cultural.superfan_density:.2f}
+- Breakout Candidate: {'Yes' if cultural.breakout_candidate else 'No'}
+"""
+
     user_prompt = f"""Produce a scouting brief for this emerging artist:
 
 Artist: {artist.name}
@@ -88,7 +124,7 @@ Engagement Rate: {input_data['engagement_rate']}
 Risk Flags: {input_data['risk_flags']}
 Fit Score: {input_data['fit_score']}
 Momentum Score: {input_data['momentum_score']}
-
+{cultural_section}
 Respond with JSON:
 {{
   "what_is_happening": "1-2 sentence summary of the artist's current trajectory",

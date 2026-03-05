@@ -8,7 +8,7 @@ from app.models.tables import (
     Label, Artist, PlatformAccount, RosterMembership,
     Snapshot, LabelCluster, ArtistFeature, Recommendation,
     Feedback, ArtistLLMBrief, Watchlist, WatchlistItem, Alert, LabelArtistState,
-    AlertRule, User,
+    AlertRule, User, ArtistCulturalProfile,
 )
 from app.models.base import new_uuid
 from app.api.schemas import (
@@ -22,7 +22,7 @@ from app.api.schemas import (
     WatchlistItemInput, WatchlistItemResponse,
     AlertResponse, AlertStatusInput, StageUpdateInput,
     LabelImportInput, RosterImportInput, RosterImportResult, RosterParsedArtist,
-    RosterConfirmInput, RosterConfirmExistingInput,
+    RosterConfirmInput, RosterConfirmExistingInput, CulturalProfileResponse,
 )
 from app.llm.roster_parse import parse_roster_text
 from app.connectors.identity import detect_platform_from_url, extract_platform_id
@@ -784,6 +784,18 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: User | None = Dep
         )
         stage_map = {s.artist_id: s.stage for s in stage_result.scalars().all()}
 
+    # Load cultural profiles for recommended artists
+    cultural_map: dict[str, ArtistCulturalProfile] = {}
+    if rec_artist_ids:
+        cultural_result = await db.execute(
+            select(ArtistCulturalProfile).where(
+                ArtistCulturalProfile.artist_id.in_(rec_artist_ids)
+            ).order_by(ArtistCulturalProfile.computed_at.desc())
+        )
+        for cp in cultural_result.scalars().all():
+            if cp.artist_id not in cultural_map:
+                cultural_map[cp.artist_id] = cp
+
     total_result = await db.execute(
         select(func.count()).select_from(Recommendation).where(
             Recommendation.label_id == label_id,
@@ -832,6 +844,19 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: User | None = Dep
             reasons.append("Strong momentum")
         if rec.risk_score is not None and rec.risk_score <= 0.1:
             reasons.append("Low risk")
+
+        # Cultural data
+        cp = cultural_map.get(rec.artist_id)
+        cultural_energy = cp.cultural_energy if cp else None
+        breakout_candidate = cp.breakout_candidate if cp else None
+        cultural_highlights = None
+        if cp and cp.cultural_profile and cp.cultural_profile.get("cultural_identity", {}).get("themes"):
+            cultural_highlights = [
+                t["label"] for t in cp.cultural_profile["cultural_identity"]["themes"][:3]
+            ]
+        if cp and cp.breakout_candidate:
+            reasons.append("Breakout signal")
+
         if len(reasons) > 3:
             reasons = reasons[:3]
 
@@ -850,6 +875,9 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: User | None = Dep
             score_breakdown=rec.score_breakdown or None,
             reasons=reasons or None,
             stage=stage_map.get(rec.artist_id),
+            cultural_energy=cultural_energy,
+            breakout_candidate=breakout_candidate,
+            cultural_highlights=cultural_highlights,
         ))
 
     return ScoutFeedResponse(
@@ -921,6 +949,31 @@ async def get_artist_detail(
     )
     feedback_rows = result.scalars().all()
 
+    # Cultural profile
+    result = await db.execute(
+        select(ArtistCulturalProfile).where(
+            ArtistCulturalProfile.artist_id == artist_id
+        ).order_by(ArtistCulturalProfile.computed_at.desc()).limit(1)
+    )
+    cultural_row = result.scalars().first()
+    cultural_profile = None
+    if cultural_row and cultural_row.cultural_profile:
+        cp = cultural_row.cultural_profile
+        cultural_profile = CulturalProfileResponse(
+            cultural_energy=cultural_row.cultural_energy,
+            sentiment=cp.get("sentiment"),
+            engagement=cp.get("engagement"),
+            superfans=cp.get("superfans"),
+            cross_platform=cp.get("cross_platform"),
+            cultural_identity=cp.get("cultural_identity"),
+            persona=cp.get("persona"),
+            polarization=cp.get("polarization"),
+            evidence_snippets=cp.get("evidence_snippets"),
+            breakout_signals=cp.get("breakout_signals"),
+            fan_community=cp.get("fan_community"),
+            scores=cp.get("scores"),
+        )
+
     label_stage = None
     if label_id:
         stage_result = await db.execute(
@@ -950,6 +1003,7 @@ async def get_artist_detail(
             for f in feedback_rows
         ],
         label_stage=label_stage,
+        cultural_profile=cultural_profile,
     )
 
 

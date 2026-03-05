@@ -6,6 +6,7 @@ from app.db.session import async_session_factory
 from app.models.tables import Label, RosterMembership
 from app.ranking.features import compute_all_candidate_features, compute_artist_features
 from app.ranking.engine import rank_candidates
+from app.ranking.cultural_features import compute_cultural_features
 from app.services.embeddings import cluster_label_artists, ensure_fallback_embeddings
 from app.services.alerts import generate_alerts_for_label
 
@@ -36,6 +37,19 @@ async def run():
         result = await db.execute(select(Artist.id).where(Artist.is_candidate == True))
         candidate_ids = [r[0] for r in result.all()]
         await ensure_fallback_embeddings(db, candidate_ids)
+
+        # Compute cultural features for candidates
+        logger.info(f"Computing cultural features for {len(candidate_ids)} candidates")
+        cultural_count = 0
+        for aid in candidate_ids:
+            try:
+                profile = await compute_cultural_features(db, aid)
+                if profile:
+                    cultural_count += 1
+            except Exception as e:
+                logger.error(f"Cultural feature computation failed for {aid}: {e}")
+        if cultural_count:
+            logger.info(f"Computed cultural profiles for {cultural_count} candidates")
 
         # Cluster and rank for each label
         result = await db.execute(select(Label.id))

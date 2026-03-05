@@ -91,6 +91,8 @@ class Artist(Base, TimestampMixin):
     watchlist_items: Mapped[List["WatchlistItem"]] = relationship(back_populates="artist")
     alerts: Mapped[List["Alert"]] = relationship(back_populates="artist")
     label_states: Mapped[List["LabelArtistState"]] = relationship(back_populates="artist")
+    cultural_signals: Mapped[List["CulturalSignal"]] = relationship(back_populates="artist")
+    cultural_profiles: Mapped[List["ArtistCulturalProfile"]] = relationship(back_populates="artist")
 
 
 class PlatformAccount(Base, TimestampMixin):
@@ -350,4 +352,71 @@ class ArtistLLMBrief(Base, TimestampMixin):
 
     __table_args__ = (
         Index("ix_llm_brief_artist_hash", "artist_id", "input_hash"),
+    )
+
+
+class CulturalSignal(Base):
+    """Raw cultural engagement data from platforms (YouTube comments, Reddit mentions)."""
+    __tablename__ = "cultural_signals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+    platform: Mapped[str] = mapped_column(String(50), nullable=False)  # youtube, reddit, twitter, tiktok
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)  # video_comment, reddit_thread
+    source_id: Mapped[str] = mapped_column(String(255), nullable=False)  # video_id, thread_id
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    comment_count: Mapped[Optional[int]] = mapped_column(Integer)
+    view_count: Mapped[Optional[int]] = mapped_column(Integer)
+    like_count: Mapped[Optional[int]] = mapped_column(Integer)
+    reply_count: Mapped[Optional[int]] = mapped_column(Integer)
+    unique_commenters: Mapped[Optional[int]] = mapped_column(Integer)
+    repeat_commenters: Mapped[Optional[int]] = mapped_column(Integer)
+
+    sampled_comments: Mapped[Optional[dict]] = mapped_column(JSONB)  # list of comment texts (no PII)
+    rule_sentiment: Mapped[Optional[dict]] = mapped_column(JSONB)  # {very_positive, positive, neutral, critical, negative}
+    extra: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+
+    artist: Mapped["Artist"] = relationship(back_populates="cultural_signals")
+
+    __table_args__ = (
+        UniqueConstraint("artist_id", "platform", "source_id", name="uq_cultural_signal"),
+        Index("ix_cultural_signal_artist_time", "artist_id", "captured_at"),
+    )
+
+
+class ArtistCulturalProfile(Base, TimestampMixin):
+    """Computed cultural profile with deterministic sub-scores and LLM interpretation."""
+    __tablename__ = "artist_cultural_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # Deterministic sub-scores (0.0-1.0)
+    sentiment_strength: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    engagement_density: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    superfan_density: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    cross_platform_presence: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    thematic_clarity: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    polarization_index: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+
+    # Composite score
+    cultural_energy: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+
+    # Breakout flag
+    breakout_candidate: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Rule-based sentiment distribution
+    sentiment_distribution: Mapped[Optional[dict]] = mapped_column(JSONB)
+
+    # Full LLM interpretation (populated by interpret_cultural_signals job)
+    cultural_profile: Mapped[Optional[dict]] = mapped_column(JSONB)
+
+    artist: Mapped["Artist"] = relationship(back_populates="cultural_profiles")
+
+    __table_args__ = (
+        Index("ix_cultural_profile_artist_time", "artist_id", "computed_at"),
+        Index("ix_cultural_profile_hash", "artist_id", "input_hash"),
     )

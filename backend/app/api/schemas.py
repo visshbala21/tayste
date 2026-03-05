@@ -168,12 +168,28 @@ class ArtistResponse(BaseModel):
         from_attributes = True
 
 
+class CulturalProfileResponse(BaseModel):
+    cultural_energy: Optional[float] = None
+    sentiment: Optional[dict] = None
+    engagement: Optional[dict] = None
+    superfans: Optional[dict] = None
+    cross_platform: Optional[dict] = None
+    cultural_identity: Optional[dict] = None
+    persona: Optional[dict] = None
+    polarization: Optional[dict] = None
+    evidence_snippets: Optional[List[dict]] = None
+    breakout_signals: Optional[dict] = None
+    fan_community: Optional[str] = None
+    scores: Optional[dict] = None
+
+
 class ArtistDetailResponse(ArtistResponse):
     snapshots: List[SnapshotResponse] = []
     latest_features: Optional[ArtistFeatureResponse] = None
     llm_brief: Optional[dict] = None
     feedback_history: Optional[list] = []
     label_stage: Optional[str] = None
+    cultural_profile: Optional[CulturalProfileResponse] = None
 
 
 # --- Scout Feed ---
@@ -193,6 +209,9 @@ class ScoutFeedItem(BaseModel):
     score_breakdown: Optional[dict] = None
     reasons: Optional[List[str]] = None
     stage: Optional[str] = None
+    cultural_energy: Optional[float] = None
+    breakout_candidate: Optional[bool] = None
+    cultural_highlights: Optional[List[str]] = None
 
 
 class ScoutFeedResponse(BaseModel):
