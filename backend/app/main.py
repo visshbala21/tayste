@@ -16,9 +16,18 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_origins = [
+    "http://localhost:3000",
+    settings.frontend_url.rstrip("/"),
+]
+# Also allow the bare Vercel domain variant (with/without www)
+for o in list(_origins):
+    if "vercel.app" in o:
+        _origins.append(o.replace("https://", "https://www."))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", settings.frontend_url],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
