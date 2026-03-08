@@ -1,22 +1,36 @@
-import resend
+import httpx
 from app.config import get_settings
 
 
-def _init_resend():
+def _send_email(to_email: str, subject: str, html: str) -> None:
     settings = get_settings()
-    resend.api_key = settings.resend_api_key
+    if not settings.sendgrid_api_key:
+        raise RuntimeError("SENDGRID_API_KEY is not configured")
+
+    httpx.post(
+        "https://api.sendgrid.com/v3/mail/send",
+        headers={
+            "Authorization": f"Bearer {settings.sendgrid_api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": settings.from_email},
+            "subject": subject,
+            "content": [{"type": "text/html", "value": html}],
+        },
+        timeout=15,
+    ).raise_for_status()
 
 
 def send_verification_email(to_email: str, name: str | None, token: str) -> None:
-    _init_resend()
     settings = get_settings()
     verify_url = f"{settings.frontend_url}/verify-email?token={token}"
 
-    resend.Emails.send({
-        "from": settings.from_email,
-        "to": [to_email],
-        "subject": "Verify your Tayste account",
-        "html": f"""
+    _send_email(
+        to_email=to_email,
+        subject="Verify your Tayste account",
+        html=f"""
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
             <h2>Welcome to Tayste{f', {name}' if name else ''}!</h2>
             <p>Please verify your email address by clicking the button below:</p>
@@ -29,19 +43,17 @@ def send_verification_email(to_email: str, name: str | None, token: str) -> None
             <p style="color: #999; font-size: 12px;">This link expires in {settings.email_verification_expiry_hours} hours.</p>
         </div>
         """,
-    })
+    )
 
 
 def send_password_reset_email(to_email: str, name: str | None, token: str) -> None:
-    _init_resend()
     settings = get_settings()
     reset_url = f"{settings.frontend_url}/reset-password?token={token}"
 
-    resend.Emails.send({
-        "from": settings.from_email,
-        "to": [to_email],
-        "subject": "Reset your Tayste password",
-        "html": f"""
+    _send_email(
+        to_email=to_email,
+        subject="Reset your Tayste password",
+        html=f"""
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
             <h2>Password Reset</h2>
             <p>Hi{f' {name}' if name else ''}, we received a request to reset your password.</p>
@@ -54,4 +66,4 @@ def send_password_reset_email(to_email: str, name: str | None, token: str) -> No
             <p style="color: #999; font-size: 12px;">This link expires in {settings.password_reset_expiry_hours} hour(s). If you didn't request this, ignore this email.</p>
         </div>
         """,
-    })
+    )
