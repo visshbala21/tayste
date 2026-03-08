@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -90,7 +90,7 @@ async def _create_and_send_verification_token(
         user_id=user.id,
         token_hash=hash_token(raw_token),
         token_type=token_type,
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=expiry_hours),
+        expires_at=datetime.utcnow() + timedelta(hours=expiry_hours),
     )
     db.add(evt)
     await db.flush()
@@ -115,10 +115,10 @@ async def _consume_token(db: AsyncSession, raw_token: str, expected_type: str) -
         raise HTTPException(status_code=400, detail="Invalid token")
     if evt.used_at is not None:
         raise HTTPException(status_code=400, detail="Token already used")
-    if evt.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+    if evt.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Token expired")
 
-    evt.used_at = datetime.now(timezone.utc)
+    evt.used_at = datetime.utcnow()
     await db.flush()
     return evt
 
