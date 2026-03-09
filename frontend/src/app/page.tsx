@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import LandingClient from "./landing-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function LandingPage() {
   let isLoggedIn = false;
   try {
