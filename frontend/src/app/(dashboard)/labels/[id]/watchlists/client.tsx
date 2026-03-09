@@ -18,6 +18,7 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [creating, setCreating] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const createWatchlist = async () => {
     const trimmed = name.trim();
@@ -44,67 +45,103 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
     }
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const sortedAlerts = useMemo(() => {
     return [...alerts].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   }, [alerts]);
 
+  const totalArtists = watchlists.reduce((sum, w) => sum + (w.item_count || 0), 0);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
-        <h2 className="text-lg font-bold mb-4 text-white">Watchlists</h2>
+      {/* Watchlists panel */}
+      <div className="bg-surface border border-white/[0.12] rounded-lg p-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
 
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-[22px] tracking-wide text-[#f5f5f0]">Watchlists</h2>
+          <div className="flex gap-3 text-xs text-white/40">
+            <span>{watchlists.length} lists</span>
+            <span>{totalArtists} artists</span>
+          </div>
+        </div>
+
+        {/* Create form */}
         <div className="grid gap-2 mb-4">
           <input
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
+            className="inp"
             placeholder="New watchlist name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
           <input
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
+            className="inp"
             placeholder="Description (optional)"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
           />
           <button
-            className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
             onClick={createWatchlist}
             disabled={creating || !name.trim()}
           >
-            {creating ? "Creating..." : "Create Watchlist"}
+            {creating ? "Creating..." : "+ New List"}
           </button>
         </div>
 
+        {/* Watchlist list */}
         <div className="grid gap-3">
           {watchlists.map((w) => (
-            <Link
-              key={w.id}
-              href={`/labels/${labelId}/watchlists/${w.id}`}
-              className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 hover:border-purple-500/20 hover:bg-white/[0.03] transition"
-            >
-              <div className="flex items-center justify-between">
+            <div key={w.id} className="bg-white/[0.03] border border-white/[0.12] rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleExpand(w.id)}
+                className="w-full p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors text-left"
+              >
                 <div>
-                  <div className="font-bold text-white">{w.name}</div>
+                  <div className="font-display text-[18px] tracking-wide text-[#f5f5f0]">{w.name}</div>
                   {w.description && <div className="text-xs text-white/35 mt-1">{w.description}</div>}
                 </div>
-                <div className="text-xs text-white/35">{w.item_count} artists</div>
-              </div>
-            </Link>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-white/35">{w.item_count} artists</span>
+                  <span className="text-white/40 text-sm">{expandedIds.has(w.id) ? "▾" : "▸"}</span>
+                </div>
+              </button>
+              {expandedIds.has(w.id) && (
+                <div className="border-t border-white/[0.06] p-3">
+                  <Link
+                    href={`/labels/${labelId}/watchlists/${w.id}`}
+                    className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
+                  >
+                    View &rarr;
+                  </Link>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>
 
-      <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
-        <h2 className="text-lg font-bold mb-4 text-white">Alerts</h2>
+      {/* Alerts panel */}
+      <div className="bg-surface border border-white/[0.12] rounded-lg p-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+        <h2 className="font-display text-[22px] tracking-wide mb-4 text-[#f5f5f0]">Alerts</h2>
         {sortedAlerts.length === 0 ? (
           <div className="text-sm text-white/35">No new alerts.</div>
         ) : (
           <div className="grid gap-3">
             {sortedAlerts.map((alert) => (
-              <div key={alert.id} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4">
+              <div key={alert.id} className="bg-white/[0.04] border border-white/[0.12] rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-bold text-white">{alert.title}</div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  <span className={`text-xs px-2 py-0.5 rounded-pill ${
                     alert.severity === "high" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
                     alert.severity === "medium" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
                     "bg-white/[0.03] text-white/35 border border-white/[0.06]"
@@ -119,19 +156,19 @@ export function WatchlistsClient({ labelId, initialWatchlists, initialAlerts }: 
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/artists/${alert.artist_id}?label=${labelId}`}
-                    className="text-xs text-purple-300/80 hover:text-purple-200"
+                    className="inline-flex items-center rounded-pill px-3 py-1 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200"
                   >
                     View artist
                   </Link>
                   <button
                     onClick={() => dismissAlert(alert.id, "seen")}
-                    className="text-xs bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1 text-white/40 hover:bg-white/[0.05]"
+                    className="inline-flex items-center rounded-pill px-3 py-1 text-xs bg-white/[0.03] border border-white/[0.12] text-white/40 hover:bg-white/[0.05] transition-all duration-200"
                   >
                     Mark seen
                   </button>
                   <button
                     onClick={() => dismissAlert(alert.id, "dismissed")}
-                    className="text-xs bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1 text-white/40 hover:bg-white/[0.05]"
+                    className="inline-flex items-center rounded-pill px-3 py-1 text-xs bg-white/[0.03] border border-white/[0.12] text-white/40 hover:bg-white/[0.05] transition-all duration-200"
                   >
                     Dismiss
                   </button>

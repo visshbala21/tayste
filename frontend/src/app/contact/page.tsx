@@ -11,19 +11,14 @@ export default function ContactPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // For now, just show confirmation — wire to backend later
     setSubmitted(true);
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-background text-[#f5f5f0] font-body">
       {/* Nav */}
       <nav className="px-6 sm:px-12 py-6 flex items-center justify-between">
-        <Link
-          href="/"
-          className="text-2xl font-extrabold tracking-tighter"
-          style={{ fontFamily: "Verdana, Geneva, sans-serif" }}
-        >
+        <Link href="/" className="font-display text-[28px] tracking-[2px] text-[#f5f5f0]">
           TAYSTE
         </Link>
         <div className="flex items-center gap-4">
@@ -35,7 +30,7 @@ export default function ContactPage() {
           </Link>
           <Link
             href="/login"
-            className="px-5 py-2 rounded-md bg-primary/20 border border-primary/40 text-white text-sm font-medium hover:bg-primary/30 transition-colors"
+            className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200"
           >
             Sign In
           </Link>
@@ -47,11 +42,8 @@ export default function ContactPage() {
         <p className="text-primary text-sm font-medium tracking-widest uppercase mb-4">
           Get in Touch
         </p>
-        <h1
-          className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] mb-6"
-          style={{ fontFamily: "Verdana, Geneva, sans-serif" }}
-        >
-          Contact
+        <h1 className="font-display text-[clamp(48px,12vw,96px)] leading-none tracking-wide mb-6">
+          REACH OUT
         </h1>
         <p className="text-white/50 text-lg max-w-2xl leading-relaxed">
           Questions, feedback, or partnership inquiries — we&apos;d love to hear from you.
@@ -64,8 +56,9 @@ export default function ContactPage() {
           {/* Contact form */}
           <div>
             {submitted ? (
-              <div className="border border-primary/20 rounded-2xl p-10 bg-primary/[0.03]">
-                <h2 className="text-2xl font-bold mb-3">Message sent</h2>
+              <div className="border border-primary/20 rounded-lg p-10 bg-primary/[0.03] relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+                <h2 className="font-display text-[28px] tracking-wide mb-3">Message Sent</h2>
                 <p className="text-white/50 mb-6">
                   Thanks for reaching out. We&apos;ll get back to you soon.
                 </p>
@@ -85,40 +78,19 @@ export default function ContactPage() {
               <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-white/60">Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    placeholder="Your name"
-                    className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                  />
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Your name" className="inp" />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-white/60">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="you@example.com"
-                    className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                  />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" className="inp" />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-white/60">Message</label>
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    required
-                    rows={5}
-                    placeholder="How can we help?"
-                    className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-primary/50 transition-colors resize-none"
-                  />
+                  <textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={5} placeholder="How can we help?" className="inp resize-none min-h-[120px]" />
                 </div>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-8 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+                  className="w-full sm:w-auto inline-flex items-center justify-center rounded-pill px-8 py-3 text-sm bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px shadow-lg shadow-primary/20"
                 >
                   Send Message
                 </button>
@@ -128,33 +100,25 @@ export default function ContactPage() {
 
           {/* Info cards */}
           <div className="flex flex-col gap-6 lg:pt-2">
-            <div className="border border-white/10 rounded-xl p-6 bg-white/[0.02]">
-              <h3 className="text-white font-semibold mb-2">General Inquiries</h3>
-              <p className="text-white/40 text-sm leading-relaxed">
-                For questions about the platform, features, or anything else — drop us a
-                message through the form.
-              </p>
-            </div>
-            <div className="border border-white/10 rounded-xl p-6 bg-white/[0.02]">
-              <h3 className="text-white font-semibold mb-2">Partnerships</h3>
-              <p className="text-white/40 text-sm leading-relaxed">
-                Interested in integrating Tayste into your label&apos;s workflow? We work
-                with labels of all sizes.
-              </p>
-            </div>
-            <div className="border border-white/10 rounded-xl p-6 bg-white/[0.02]">
-              <h3 className="text-white font-semibold mb-2">Support</h3>
-              <p className="text-white/40 text-sm leading-relaxed">
-                Having trouble with your account or the platform? We&apos;ll sort it out.
-              </p>
-            </div>
+            {[
+              { title: "General Inquiries", desc: "For questions about the platform, features, or anything else \u2014 drop us a message through the form." },
+              { title: "Partnerships", desc: "Interested in integrating Tayste into your label\u2019s workflow? We work with labels of all sizes." },
+              { title: "Support", desc: "Having trouble with your account or the platform? We\u2019ll sort it out." },
+            ].map((card) => (
+              <div key={card.title} className="bg-surface border border-white/[0.12] rounded-lg p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+                <h3 className="font-display text-[18px] tracking-wide text-[#f5f5f0] mb-2">{card.title}</h3>
+                <p className="text-white/40 text-sm leading-relaxed">{card.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 py-6 px-6 sm:px-12 text-sm text-white/30">
-        Tayste — AI A&R Intelligence
+      <footer className="border-t border-dashed border-white/[0.12] py-4 px-6 sm:px-12 flex justify-between text-[10px] text-white/30">
+        <span>Copyright &copy; {new Date().getFullYear()}</span>
+        <span>Tayste — AI A&R Intelligence</span>
       </footer>
     </div>
   );

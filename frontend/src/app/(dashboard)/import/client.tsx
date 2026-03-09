@@ -93,7 +93,7 @@ function SimpleImport() {
           <div className="grid gap-2">
             <label className="text-sm text-white/35">Label Name</label>
             <input
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
+              className="inp"
               value={labelName}
               onChange={(e) => setLabelName(e.target.value)}
               placeholder="Neon Dusk Records"
@@ -105,10 +105,10 @@ function SimpleImport() {
             <div className="flex gap-2">
               <button
                 type="button"
-                className={`flex-1 px-3 py-2 rounded-lg text-sm border transition ${
+                className={`flex-1 rounded-pill px-4 py-2.5 text-sm border transition-all duration-200 ${
                   discoveryMode === "emerging"
-                    ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                    : "bg-white/[0.03] text-white/40 border-white/[0.08] hover:text-white/60"
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-transparent text-white/40 border-white/[0.12] hover:text-white/60 hover:border-primary/30"
                 }`}
                 onClick={() => setDiscoveryMode("emerging")}
               >
@@ -117,10 +117,10 @@ function SimpleImport() {
               </button>
               <button
                 type="button"
-                className={`flex-1 px-3 py-2 rounded-lg text-sm border transition ${
+                className={`flex-1 rounded-pill px-4 py-2.5 text-sm border transition-all duration-200 ${
                   discoveryMode === "open"
-                    ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                    : "bg-white/[0.03] text-white/40 border-white/[0.08] hover:text-white/60"
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-transparent text-white/40 border-white/[0.12] hover:text-white/60 hover:border-primary/30"
                 }`}
                 onClick={() => setDiscoveryMode("open")}
               >
@@ -133,7 +133,7 @@ function SimpleImport() {
           <div className="grid gap-2">
             <label className="text-sm text-white/35">Artist Names</label>
             <textarea
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 min-h-[12rem] text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
+              className="inp min-h-[12rem] resize-vertical"
               value={artistText}
               onChange={(e) => setArtistText(e.target.value)}
               placeholder={"Paste artist names in any format:\n\n2Pac, Dr. Dre, Snoop Dogg, Nate Dogg\n\n1. Tame Impala\n2. Men I Trust\n3. Beabadoobee\n\nClairo and Boy Pablo\nTha Dogg Pound (Kurupt & Daz Dillinger)"}
@@ -154,7 +154,7 @@ function SimpleImport() {
 
           <button
             type="submit"
-            className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
+            className="w-full inline-flex items-center justify-center rounded-pill px-5 py-2.5 text-sm bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
             disabled={disabled}
           >
             {status === "loading" ? (
@@ -176,14 +176,14 @@ function SimpleImport() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-white">Resolved Artists</h3>
+              <h3 className="font-display text-[22px] tracking-wide text-[#f5f5f0]">Resolved Artists</h3>
               <p className="text-sm text-white/40">
                 {resolved.filter((a) => a.include).length} of {resolved.length} selected
               </p>
             </div>
             <button
               type="button"
-              className="text-sm text-white/40 hover:text-white/60 transition px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05]"
+              className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-white/[0.12] text-white/40 hover:border-primary hover:text-primary transition-all duration-200"
               onClick={() => setStep("input")}
             >
               Back
@@ -204,9 +204,9 @@ function SimpleImport() {
             {resolved.map((artist, idx) => (
               <div
                 key={idx}
-                className={`relative border rounded-xl p-4 transition cursor-pointer ${
+                className={`relative border rounded-lg p-4 transition cursor-pointer overflow-hidden ${
                   artist.include
-                    ? "border-purple-500/30 bg-white/[0.04]"
+                    ? "border-primary/30 bg-surface"
                     : "border-white/[0.06] bg-white/[0.01] opacity-50"
                 }`}
                 onClick={() => {
@@ -215,20 +215,23 @@ function SimpleImport() {
                   setResolved(next);
                 }}
               >
+                {artist.include && (
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+                )}
                 <div className="flex items-start gap-3">
                   {artist.image_url ? (
                     <img
                       src={artist.image_url}
                       alt={artist.name}
-                      className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                      className="w-12 h-12 rounded-full object-cover flex-shrink-0 border border-white/[0.12]"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
-                      <span className="text-white/20 text-lg">?</span>
+                    <div className="vinyl flex-shrink-0" style={{ width: 48, height: 48 }}>
+                      <div className="rounded-full bg-[#0a0a0a] border border-white/[0.12] absolute" style={{ width: 10, height: 10 }} />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-white truncate">{artist.name}</div>
+                    <div className="font-display text-[16px] tracking-wide text-[#f5f5f0] truncate">{artist.name}</div>
                     {artist.query_name !== artist.name && (
                       <div className="text-xs text-white/30 truncate">searched: {artist.query_name}</div>
                     )}
@@ -249,12 +252,7 @@ function SimpleImport() {
                 {artist.genres && artist.genres.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {artist.genres.slice(0, 4).map((g, gi) => (
-                      <span
-                        key={gi}
-                        className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-white/50"
-                      >
-                        {g}
-                      </span>
+                      <span key={gi} className="tag text-[9px]">{g}</span>
                     ))}
                   </div>
                 )}
@@ -280,7 +278,7 @@ function SimpleImport() {
           <div className="mt-6 flex gap-3">
             <button
               type="button"
-              className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
+              className="w-full inline-flex items-center justify-center rounded-pill px-5 py-2.5 text-sm bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
               onClick={onConfirm}
               disabled={status === "loading" || resolved.filter((a) => a.include).length === 0}
             >
@@ -301,12 +299,13 @@ function SimpleImport() {
       )}
 
       {step === "done" && result && (
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-5">
+        <div className="bg-surface border border-white/[0.12] rounded-lg p-5 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
           <div className="flex items-center gap-2 mb-3">
             <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <span className="font-semibold text-white">Import Complete</span>
+            <span className="font-display text-[18px] tracking-wide text-[#f5f5f0]">Import Complete</span>
           </div>
           <div className="text-sm text-white/60 space-y-1">
             <p>Created {result.created_count} artists for <span className="text-white/80">{result.label_name}</span></p>
@@ -316,9 +315,9 @@ function SimpleImport() {
           {result.label_id && (
             <Link
               href={`/labels/${result.label_id}/scout-feed`}
-              className="inline-block mt-4 text-sm text-purple-300 hover:text-purple-200 transition"
+              className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px mt-4"
             >
-              Go to Scout Feed →
+              Go to Scout Feed &rarr;
             </Link>
           )}
         </div>
@@ -480,38 +479,23 @@ function AdvancedImport() {
       <form onSubmit={onPreview} className="grid gap-4">
         <div className="grid gap-2">
           <label className="text-sm text-white/35">Label Name</label>
-          <input
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
-            value={labelName}
-            onChange={(e) => setLabelName(e.target.value)}
-            placeholder="Neon Dusk Records"
-          />
+          <input className="inp" value={labelName} onChange={(e) => setLabelName(e.target.value)} placeholder="Neon Dusk Records" />
         </div>
 
         <div className="grid gap-2">
           <label className="text-sm text-white/35">Label Description (optional)</label>
-          <input
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Atmospheric, guitar-driven indie..."
-          />
+          <input className="inp" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Atmospheric, guitar-driven indie..." />
         </div>
 
         <div className="grid gap-2">
           <label className="text-sm text-white/35">Primary Genres (comma-separated)</label>
-          <input
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
-            value={primaryGenres}
-            onChange={(e) => setPrimaryGenres(e.target.value)}
-            placeholder="dream-pop, post-punk, ambient"
-          />
+          <input className="inp" value={primaryGenres} onChange={(e) => setPrimaryGenres(e.target.value)} placeholder="dream-pop, post-punk, ambient" />
         </div>
 
         <div className="grid gap-2">
           <label className="text-sm text-white/35">Roster Text</label>
           <textarea
-            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 min-h-[24rem] text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
+            className="inp min-h-[24rem] resize-vertical"
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder={`${sampleJson}\n\nFreeform examples:\nVelvet Collapse - https://youtube.com/channel/UC...\nPale Meridian - https://open.spotify.com/artist/4Z8W30...\nGhost Antenna (post-punk, darkwave)\n@duskprotocol https://youtube.com/@duskprotocol`}
@@ -528,33 +512,19 @@ function AdvancedImport() {
         </div>
 
         <div className="flex items-center gap-3">
-          <input
-            id="resolve-missing"
-            type="checkbox"
-            checked={resolveMissing}
-            onChange={(e) => setResolveMissing(e.target.checked)}
-          />
-          <label htmlFor="resolve-missing" className="text-sm text-white/60">
-            Resolve missing YouTube IDs by search
-          </label>
+          <input id="resolve-missing" type="checkbox" checked={resolveMissing} onChange={(e) => setResolveMissing(e.target.checked)} />
+          <label htmlFor="resolve-missing" className="text-sm text-white/60">Resolve missing YouTube IDs by search</label>
         </div>
 
         <div className="flex items-center gap-3">
-          <input
-            id="run-pipeline"
-            type="checkbox"
-            checked={runPipeline}
-            onChange={(e) => setRunPipeline(e.target.checked)}
-          />
-          <label htmlFor="run-pipeline" className="text-sm text-white/60">
-            Run discovery pipeline after import
-          </label>
+          <input id="run-pipeline" type="checkbox" checked={runPipeline} onChange={(e) => setRunPipeline(e.target.checked)} />
+          <label htmlFor="run-pipeline" className="text-sm text-white/60">Run discovery pipeline after import</label>
         </div>
 
         {step === "input" && (
           <button
             type="submit"
-            className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
+            className="w-full inline-flex items-center justify-center rounded-pill px-5 py-2.5 text-sm bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
             disabled={disabled}
           >
             {status === "loading" ? "Parsing..." : "Preview Parse"}
@@ -567,8 +537,9 @@ function AdvancedImport() {
       )}
 
       {step === "review" && result && (
-        <div className="mt-6 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 text-sm">
-          <div className="font-bold mb-2 text-white">Review Parsed Roster</div>
+        <div className="mt-6 bg-surface border border-white/[0.12] rounded-lg p-4 text-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+          <div className="font-display text-[18px] tracking-wide mb-2 text-[#f5f5f0]">Review Parsed Roster</div>
           <div className="text-white/60 mb-2">
             Parsed {result.parsed_count} entries. Review and confirm before importing.
           </div>
@@ -585,7 +556,7 @@ function AdvancedImport() {
 
           <div className="mt-4 grid gap-3">
             {entries.map((entry, idx) => (
-              <div key={idx} className="grid gap-2 border border-white/[0.06] rounded-xl p-3">
+              <div key={idx} className="grid gap-2 border border-white/[0.12] rounded-lg p-3">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -597,7 +568,7 @@ function AdvancedImport() {
                     }}
                   />
                   <input
-                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 flex-1 text-white/80 focus:outline-none focus:border-purple-500/30"
+                    className="inp flex-1"
                     value={entry.name}
                     onChange={(e) => {
                       const next = [...entries];
@@ -608,36 +579,9 @@ function AdvancedImport() {
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <input
-                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-purple-500/30"
-                    value={entry.platform || ""}
-                    onChange={(e) => {
-                      const next = [...entries];
-                      next[idx] = { ...entry, platform: e.target.value };
-                      setEntries(next);
-                    }}
-                    placeholder="platform (youtube)"
-                  />
-                  <input
-                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-purple-500/30"
-                    value={entry.platform_id || ""}
-                    onChange={(e) => {
-                      const next = [...entries];
-                      next[idx] = { ...entry, platform_id: e.target.value };
-                      setEntries(next);
-                    }}
-                    placeholder="platform_id (UC...)"
-                  />
-                  <input
-                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 md:col-span-2 text-white/80 focus:outline-none focus:border-purple-500/30"
-                    value={entry.platform_url || ""}
-                    onChange={(e) => {
-                      const next = [...entries];
-                      next[idx] = { ...entry, platform_url: e.target.value };
-                      setEntries(next);
-                    }}
-                    placeholder="platform_url"
-                  />
+                  <input className="inp" value={entry.platform || ""} onChange={(e) => { const next = [...entries]; next[idx] = { ...entry, platform: e.target.value }; setEntries(next); }} placeholder="platform (youtube)" />
+                  <input className="inp" value={entry.platform_id || ""} onChange={(e) => { const next = [...entries]; next[idx] = { ...entry, platform_id: e.target.value }; setEntries(next); }} placeholder="platform_id (UC...)" />
+                  <input className="inp md:col-span-2" value={entry.platform_url || ""} onChange={(e) => { const next = [...entries]; next[idx] = { ...entry, platform_url: e.target.value }; setEntries(next); }} placeholder="platform_url" />
                   {entry.additional_platforms && entry.additional_platforms.length > 0 && (
                     entry.additional_platforms.map((ap, apIdx) => (
                       <div key={apIdx} className="md:col-span-2 flex items-center gap-2 text-xs text-white/35 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5">
@@ -647,16 +591,7 @@ function AdvancedImport() {
                       </div>
                     ))
                   )}
-                  <input
-                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 md:col-span-2 text-white/80 focus:outline-none focus:border-purple-500/30"
-                    value={entry.genre_input}
-                    onChange={(e) => {
-                      const next = [...entries];
-                      next[idx] = { ...entry, genre_input: e.target.value };
-                      setEntries(next);
-                    }}
-                    placeholder="genres (comma-separated)"
-                  />
+                  <input className="inp md:col-span-2" value={entry.genre_input} onChange={(e) => { const next = [...entries]; next[idx] = { ...entry, genre_input: e.target.value }; setEntries(next); }} placeholder="genres (comma-separated)" />
                 </div>
               </div>
             ))}
@@ -665,14 +600,14 @@ function AdvancedImport() {
           <div className="mt-4 flex gap-3">
             <button
               type="button"
-              className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2 text-white/40 hover:bg-white/[0.05]"
+              className="inline-flex items-center rounded-pill px-5 py-2 text-sm bg-transparent border border-white/[0.12] text-white/40 hover:border-primary hover:text-primary transition-all duration-200"
               onClick={() => setStep("input")}
             >
               Back
             </button>
             <button
               type="button"
-              className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
+              className="flex-1 inline-flex items-center justify-center rounded-pill px-5 py-2 text-sm bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
               onClick={onConfirm}
               disabled={status === "loading"}
             >
@@ -683,8 +618,9 @@ function AdvancedImport() {
       )}
 
       {step === "done" && result && (
-        <div className="mt-6 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 text-sm">
-          <div className="font-bold mb-2 text-white">Import Complete</div>
+        <div className="mt-6 bg-surface border border-white/[0.12] rounded-lg p-4 text-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+          <div className="font-display text-[18px] tracking-wide mb-2 text-[#f5f5f0]">Import Complete</div>
           <div className="text-white/60 mb-2">
             Parsed {result.parsed_count} entries, created {result.created_count}, skipped {result.skipped_count}.
           </div>
@@ -720,23 +656,15 @@ export function ImportRosterClient() {
   const [tab, setTab] = useState<ImportTab>("simple");
 
   return (
-    <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-white">Import Roster</h2>
-        <Link
-          href="/dashboard"
-          className="text-sm text-white/40 hover:text-white/60 transition px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05]"
-        >
-          Back to Dashboard
-        </Link>
-      </div>
+    <div className="bg-surface border border-white/[0.12] rounded-lg p-6 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
 
       {/* Tab Switcher */}
       <div className="flex gap-1 mb-6 bg-white/[0.03] rounded-lg p-1 w-fit">
         <button
-          className={`px-4 py-1.5 rounded-md text-sm transition ${
+          className={`px-4 py-1.5 rounded-md text-sm transition-all duration-200 ${
             tab === "simple"
-              ? "bg-purple-500/15 text-purple-300 border border-purple-500/20"
+              ? "bg-primary text-[#f5f5f0]"
               : "text-white/40 hover:text-white/60"
           }`}
           onClick={() => setTab("simple")}
@@ -744,9 +672,9 @@ export function ImportRosterClient() {
           Simple
         </button>
         <button
-          className={`px-4 py-1.5 rounded-md text-sm transition ${
+          className={`px-4 py-1.5 rounded-md text-sm transition-all duration-200 ${
             tab === "advanced"
-              ? "bg-purple-500/15 text-purple-300 border border-purple-500/20"
+              ? "bg-primary text-[#f5f5f0]"
               : "text-white/40 hover:text-white/60"
           }`}
           onClick={() => setTab("advanced")}

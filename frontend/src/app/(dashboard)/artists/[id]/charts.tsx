@@ -12,6 +12,13 @@ export function ArtistCharts({ snapshots }: { snapshots: Snapshot[] }) {
   }));
   const hasEngagement = data.some((d) => d.engagement != null);
 
+  const tooltipStyle = {
+    background: "#1e1e28",
+    border: "1px solid rgba(124,92,252,0.25)",
+    borderRadius: "8px",
+    color: "#f5f5f0",
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
@@ -21,8 +28,8 @@ export function ArtistCharts({ snapshots }: { snapshots: Snapshot[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
             <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
             <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
-            <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid rgba(139,92,246,0.15)", borderRadius: "8px", color: "#e5e7eb" }} />
-            <Line type="monotone" dataKey="followers" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line type="monotone" dataKey="followers" stroke="#7c5cfc" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -33,8 +40,8 @@ export function ArtistCharts({ snapshots }: { snapshots: Snapshot[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
             <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
             <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
-            <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid rgba(139,92,246,0.15)", borderRadius: "8px", color: "#e5e7eb" }} />
-            <Line type="monotone" dataKey="views" stroke="#06b6d4" strokeWidth={2} dot={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line type="monotone" dataKey="views" stroke="#c45cfc" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -46,7 +53,7 @@ export function ArtistCharts({ snapshots }: { snapshots: Snapshot[] }) {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
               <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
-              <Tooltip contentStyle={{ background: "#0a0a10", border: "1px solid rgba(139,92,246,0.15)", borderRadius: "8px", color: "#e5e7eb" }} />
+              <Tooltip contentStyle={tooltipStyle} />
               <Line type="monotone" dataKey="engagement" stroke="#10b981" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>

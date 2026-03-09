@@ -15,7 +15,7 @@ function AbstractOrb({ className }: { className?: string }) {
     >
       <ellipse cx="250" cy="260" rx="200" ry="200" stroke="#a855f7" strokeWidth="18" opacity="0.7" />
       <ellipse cx="250" cy="260" rx="200" ry="200" stroke="#22d3ee" strokeWidth="12" opacity="0.3" strokeDasharray="60 80" />
-      <ellipse cx="250" cy="260" rx="155" ry="155" stroke="#8b5cf6" strokeWidth="22" opacity="0.8" />
+      <ellipse cx="250" cy="260" rx="155" ry="155" stroke="#7c5cfc" strokeWidth="22" opacity="0.8" />
       <ellipse cx="250" cy="260" rx="155" ry="155" stroke="#c084fc" strokeWidth="8" opacity="0.4" strokeDasharray="40 50" />
       <ellipse cx="250" cy="260" rx="110" ry="110" stroke="#34d399" strokeWidth="16" opacity="0.6" />
       <ellipse cx="250" cy="260" rx="110" ry="108" stroke="#a78bfa" strokeWidth="10" opacity="0.5" strokeDasharray="30 40" />
@@ -27,11 +27,11 @@ function AbstractOrb({ className }: { className?: string }) {
       <ellipse cx="60" cy="280" rx="14" ry="30" fill="#ef4444" opacity="0.7" />
       <ellipse cx="80" cy="240" rx="10" ry="22" fill="#f97316" opacity="0.6" />
       <ellipse cx="440" cy="240" rx="12" ry="28" fill="#34d399" opacity="0.6" />
-      <ellipse cx="420" cy="300" rx="10" ry="20" fill="#8b5cf6" opacity="0.5" />
+      <ellipse cx="420" cy="300" rx="10" ry="20" fill="#7c5cfc" opacity="0.5" />
       <ellipse cx="200" cy="450" rx="20" ry="14" fill="#ec4899" opacity="0.7" />
       <ellipse cx="250" cy="460" rx="16" ry="10" fill="#a855f7" opacity="0.6" />
       <ellipse cx="300" cy="448" rx="18" ry="12" fill="#c084fc" opacity="0.5" />
-      <circle cx="180" cy="470" r="8" fill="#8b5cf6" opacity="0.5" />
+      <circle cx="180" cy="470" r="8" fill="#7c5cfc" opacity="0.5" />
       <circle cx="320" cy="465" r="6" fill="#22d3ee" opacity="0.4" />
       <circle cx="250" cy="480" r="10" fill="#a855f7" opacity="0.3" />
       <defs>
@@ -78,10 +78,8 @@ export default function LandingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const verdana: React.CSSProperties = { fontFamily: "Verdana, Geneva, sans-serif" };
-
   return (
-    <div className="bg-black text-white min-h-screen" style={verdana}>
+    <div className="bg-background text-[#f5f5f0] min-h-screen font-body">
       {/* ═══════════════════════════════════════════════════════════
           STICKY NAVBAR — appears when scrolled past hero
          ═══════════════════════════════════════════════════════════ */}
@@ -98,7 +96,7 @@ export default function LandingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
             <div className="flex items-center gap-6">
               <a
                 href="#top"
-                className="text-2xl font-extrabold tracking-tighter"
+                className="font-display text-[28px] tracking-[2px]"
               >
                 TAYSTE
               </a>
@@ -144,7 +142,7 @@ export default function LandingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
       <section id="top" ref={heroRef} className="relative min-h-screen flex flex-col px-6 sm:px-12">
         {/* Giant TAYSTE title */}
         <h1
-          className={`pt-8 sm:pt-12 text-[clamp(4rem,14vw,12rem)] font-extrabold leading-[0.9] tracking-tighter text-white/90 select-none transition-all duration-500 ${
+          className={`pt-8 sm:pt-12 font-display text-[clamp(4rem,14vw,12rem)] leading-[0.9] tracking-[4px] text-[#f5f5f0]/90 select-none transition-all duration-500 ${
             scrolled ? "opacity-0 -translate-y-8" : "opacity-100 translate-y-0"
           }`}
         >
@@ -318,8 +316,8 @@ export default function LandingClient({ isLoggedIn }: { isLoggedIn: boolean }) {
         {/* Inverted TAYSTE */}
         <div className="flex justify-center mb-6">
           <span
-            className="text-[clamp(3rem,10vw,8rem)] font-extrabold tracking-tighter text-white/90 select-none"
-            style={{ transform: "scaleY(-1)" }}
+            className="font-display text-[clamp(3rem,10vw,8rem)] tracking-[4px] text-[#f5f5f0]/18 select-none"
+            style={{ transform: "scaleX(-1) scaleY(-1)", display: "inline-block" }}
           >
             TAYSTE
           </span>

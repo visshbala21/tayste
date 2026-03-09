@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { api, Label } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const displayName = user?.user_metadata?.name || user?.user_metadata?.full_name || "there";
+
   let labels: Label[] = [];
   try {
     labels = await api.getLabels();
@@ -16,107 +21,240 @@ export default async function DashboardPage() {
     (l) => l.pipeline_status === "queued" || l.pipeline_status === "running"
   );
 
+  const activeLabel = labels[0] || null;
+
+  // Fetch scout feed top 6 for active label
+  let topCandidates: any[] = [];
+  let watchlistCount = 0;
+  let savedArtistCount = 0;
+  if (activeLabel) {
+    try {
+      const [feed, watchlists] = await Promise.all([
+        api.getScoutFeed(activeLabel.id, 6),
+        api.getWatchlists(activeLabel.id),
+      ]);
+      topCandidates = feed.items.slice(0, 6);
+      watchlistCount = watchlists.length;
+      savedArtistCount = watchlists.reduce((sum, w) => sum + (w.item_count || 0), 0);
+    } catch {
+      // ignore
+    }
+  }
+
   return (
-    <div>
+    <div className="page-fade">
       <PipelinePoller status={anyActive ? "running" : undefined} />
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold mb-2 text-white tracking-tight">Labels</h1>
-        <p className="text-white/40">Select a label to view its taste map and scout feed.</p>
-        <div className="mt-4">
-          <Link
-            href="/import"
-            className="inline-flex items-center text-sm text-purple-300 hover:text-purple-200 transition px-4 py-2 rounded-md bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/15"
-          >
-            + Import Roster
-          </Link>
+
+      {/* Hero greeting */}
+      <div className="border-b border-dashed border-white/[0.12] pb-6 mb-0">
+        <div className="flex items-start justify-between flex-wrap gap-5">
+          <div>
+            <div className="text-[11px] text-white/35 tracking-[2px] uppercase mb-2">
+              Welcome back,
+            </div>
+            <h1 className="font-display text-[clamp(48px,12vw,96px)] leading-none text-[#f5f5f0]">
+              {displayName.toUpperCase()}
+            </h1>
+            <div className="text-white/45 mt-2 italic text-sm">
+              A&R Intelligence Dashboard
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 min-w-[180px]">
+            <Link
+              href="/import"
+              className="inline-flex items-center gap-2 rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px"
+            >
+              + New Import
+            </Link>
+            {activeLabel && (
+              <Link
+                href={`/labels/${activeLabel.id}/taste-map`}
+                className="inline-flex items-center gap-2 rounded-pill px-5 py-2 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
+              >
+                View Taste Map
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
-      {labels.length === 0 ? (
-        <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-12 text-center">
-          <p className="text-white/40">No labels yet. Import a roster to get started.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {labels.map((label) => (
-            <div
-              key={label.id}
-              className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6 hover:border-purple-500/20 hover:bg-white/[0.03] transition-all duration-300 group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold text-white group-hover:text-purple-200 transition">{label.name}</h2>
-                    {label.pipeline_status === "queued" && (
-                      <span className="text-[11px] bg-amber-500/10 text-amber-300/80 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1.5">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/80 animate-pulse" />
-                        Queued
-                      </span>
+      {/* Stats grid */}
+      <div className="grid grid-cols-4 gap-px border-b border-white/[0.12]">
+        {[
+          [String(savedArtistCount), "Saved Artists"],
+          [String(watchlistCount), "Active Lists"],
+          [String(labels.length), "Labels"],
+          [anyActive ? "Running" : activeLabel?.pipeline_status === "complete" ? "Ready" : "Idle", "Pipeline Status"],
+        ].map(([value, label]) => (
+          <div key={label} className="p-3 text-center bg-white/[0.03] border-r border-white/[0.12] last:border-r-0">
+            <div className="font-display text-[32px] leading-none text-primary">{value}</div>
+            <div className="text-[10px] text-white/40 tracking-wider uppercase mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Labels section */}
+      <div className="mt-6">
+        <h2 className="font-display text-[22px] tracking-wide py-3.5 border-b border-dashed border-white/[0.12] text-[#f5f5f0] mb-4">
+          Your Labels
+        </h2>
+
+        {labels.length === 0 ? (
+          <div className="bg-surface border border-white/[0.12] rounded-lg p-12 text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+            <p className="text-white/40">No labels yet. Import a roster to get started.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {labels.map((label) => (
+              <div
+                key={label.id}
+                className="bg-surface border border-white/[0.12] rounded-lg p-5 relative overflow-hidden hover:border-primary/40 transition-all duration-300 group"
+              >
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-display text-[22px] tracking-wide text-[#f5f5f0] group-hover:text-primary-light transition">
+                        {label.name}
+                      </h3>
+                      <PipelineBadge status={label.pipeline_status} />
+                    </div>
+                    <p className="text-white/35 text-sm mt-1">{label.description}</p>
+                    {label.genre_tags && (
+                      <div className="flex gap-2 mt-3">
+                        {(label.genre_tags as any).primary?.map((g: string) => (
+                          <span key={g} className="tag">{g}</span>
+                        ))}
+                      </div>
                     )}
-                    {label.pipeline_status === "running" && (
-                      <span className="text-[11px] bg-purple-500/10 text-purple-300/80 px-2 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1.5">
-                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Running
-                      </span>
-                    )}
-                    {label.pipeline_status === "complete" && (
-                      <span className="text-[11px] bg-emerald-500/10 text-emerald-300/80 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                        Ready
-                      </span>
-                    )}
-                    {!label.pipeline_status || label.pipeline_status === "idle" ? (
-                      <span className="text-[11px] bg-white/[0.04] text-white/30 px-2 py-0.5 rounded-full border border-white/[0.06]">
-                        Not run
-                      </span>
-                    ) : null}
-                    {label.pipeline_status === "canceled" && (
-                      <span className="text-[11px] bg-white/[0.04] text-white/30 px-2 py-0.5 rounded-full border border-white/[0.06]">
-                        Canceled
-                      </span>
-                    )}
-                    {label.pipeline_status === "error" && (
-                      <span className="text-[11px] bg-red-500/10 text-red-300/80 px-2 py-0.5 rounded-full border border-red-500/20">
-                        Error
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-white/35 text-sm mt-1">{label.description}</p>
-                  {label.genre_tags && (
-                    <div className="flex gap-2 mt-3">
-                      {(label.genre_tags as any).primary?.map((g: string) => (
-                        <span key={g} className="text-[11px] bg-purple-500/8 text-purple-300/60 px-2.5 py-0.5 rounded-full border border-purple-500/15">{g}</span>
+
+                    {/* Waveform decoration */}
+                    <div className="mt-3 wave" style={{ height: 24 }}>
+                      {[12, 20, 8, 24, 16, 22, 10, 18, 26, 14, 20, 12].map((h, i) => (
+                        <div
+                          key={i}
+                          className="wave-bar"
+                          style={{ height: h, opacity: 0.3 + (i % 3) * 0.1 }}
+                        />
                       ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <Link
+                      href={`/labels/${label.id}/scout-feed`}
+                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px"
+                    >
+                      Scout Feed
+                    </Link>
+                    <Link
+                      href={`/labels/${label.id}/taste-map`}
+                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
+                    >
+                      Taste Map
+                    </Link>
+                    <Link
+                      href={`/labels/${label.id}/watchlists`}
+                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-white/[0.12] text-white/40 hover:bg-white/[0.05] hover:text-white/60 transition-all duration-200 hover:-translate-y-px"
+                    >
+                      Collections
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Top Candidates row */}
+      {topCandidates.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-display text-[22px] tracking-wide py-3.5 border-b border-dashed border-white/[0.12] text-[#f5f5f0] mb-4">
+            Top Candidates
+          </h2>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {topCandidates.map((item: any) => (
+              <Link
+                key={item.artist_id}
+                href={`/artists/${item.artist_id}?label=${activeLabel!.id}`}
+                className="min-w-[180px] bg-surface border border-white/[0.12] rounded-lg overflow-hidden hover:border-primary/40 transition-all duration-200 hover:-translate-y-0.5 flex-shrink-0 relative group"
+              >
+                {/* Gradient header area */}
+                <div className="h-[80px] bg-gradient-to-br from-[#2a1a4a] to-[#1a2a4a] relative flex items-center justify-center">
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
+                  {/* Vinyl avatar */}
+                  <div className="vinyl" style={{ width: 50, height: 50 }}>
+                    <div className="rounded-full bg-[#0a0a0a] border-2 border-white/[0.12] absolute" style={{ width: 10, height: 10 }} />
+                  </div>
+                  {/* Match score badge */}
+                  <span className="absolute top-2 right-2 bg-primary text-[#f5f5f0] text-[11px] font-display px-2.5 py-0.5 rounded-full tracking-wide">
+                    {(item.final_score * 100).toFixed(0)}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <div className="font-display text-[18px] tracking-wide text-[#f5f5f0] truncate">
+                    {item.artist_name}
+                  </div>
+                  {item.genre_tags && item.genre_tags.length > 0 && (
+                    <div className="text-[10px] text-white/35 mt-1 truncate">
+                      {item.genre_tags.slice(0, 2).join(" / ")}
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/labels/${label.id}/taste-map`}
-                    className="text-xs text-cyan-300/70 hover:text-cyan-200 transition px-3 py-1.5 rounded-md bg-cyan-500/8 border border-cyan-500/15 hover:bg-cyan-500/12"
-                  >
-                    Taste Map
-                  </Link>
-                  <Link
-                    href={`/labels/${label.id}/watchlists`}
-                    className="text-xs text-white/40 hover:text-white/60 transition px-3 py-1.5 rounded-md bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05]"
-                  >
-                    Watchlists
-                  </Link>
-                  <Link
-                    href={`/labels/${label.id}/scout-feed`}
-                    className="text-xs text-purple-300/80 hover:text-purple-200 transition px-3 py-1.5 rounded-md bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/15"
-                  >
-                    Scout Feed
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ))}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function PipelineBadge({ status }: { status?: string }) {
+  if (status === "queued") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] bg-amber-500/10 text-amber-300/80 px-2.5 py-0.5 rounded-pill border border-amber-500/20">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/80 animate-pulse" />
+        Queued
+      </span>
+    );
+  }
+  if (status === "running") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] bg-primary/10 text-primary-light px-2.5 py-0.5 rounded-pill border border-primary/20">
+        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Running
+      </span>
+    );
+  }
+  if (status === "complete") {
+    return (
+      <span className="text-[11px] bg-emerald-500/10 text-emerald-300/80 px-2.5 py-0.5 rounded-pill border border-emerald-500/20">
+        Ready
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="text-[11px] bg-red-500/10 text-red-300/80 px-2.5 py-0.5 rounded-pill border border-red-500/20">
+        Error
+      </span>
+    );
+  }
+  if (status === "canceled") {
+    return (
+      <span className="text-[11px] bg-white/[0.04] text-white/30 px-2.5 py-0.5 rounded-pill border border-white/[0.06]">
+        Canceled
+      </span>
+    );
+  }
+  return (
+    <span className="text-[11px] bg-white/[0.04] text-white/30 px-2.5 py-0.5 rounded-pill border border-white/[0.06]">
+      Not run
+    </span>
   );
 }
