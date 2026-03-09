@@ -44,12 +44,7 @@ function SimpleImport() {
     setError(null);
 
     try {
-      const names = artistText
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-
-      const res = await api.simpleImportResolve(labelName.trim(), names);
+      const res = await api.simpleImportResolve(labelName.trim(), artistText);
       setResolved(res.artists.map((a) => ({ ...a, include: true })));
       setWarnings(res.warnings);
       setStep("preview");
@@ -108,7 +103,7 @@ function SimpleImport() {
               className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 min-h-[12rem] text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
               value={artistText}
               onChange={(e) => setArtistText(e.target.value)}
-              placeholder={"One artist per line, e.g.:\n\nTame Impala\nMen I Trust\nBeabadoobee\nClairo\nBoy Pablo"}
+              placeholder={"Paste artist names in any format:\n\n2Pac, Dr. Dre, Snoop Dogg, Nate Dogg\n\n1. Tame Impala\n2. Men I Trust\n3. Beabadoobee\n\nClairo and Boy Pablo\nTha Dogg Pound (Kurupt & Daz Dillinger)"}
             />
           </div>
 

@@ -352,7 +352,7 @@ class ArtistBriefOutput(BaseModel):
 
 class SimpleImportInput(BaseModel):
     label_name: str
-    artist_names: List[str]
+    artist_text: str
 
 
 class ResolvedArtistProfile(BaseModel):

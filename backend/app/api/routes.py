@@ -557,14 +557,18 @@ async def simple_import_resolve(
     data: SimpleImportInput,
     user: Profile | None = Depends(get_optional_user),
 ):
-    """Resolve artist names to platform profiles for simple import."""
-    from app.services.resolve_artists import resolve_artist_names
+    """Resolve artist names from freeform text to platform profiles."""
+    from app.services.resolve_artists import resolve_artist_names, extract_artist_names
 
-    if not data.artist_names:
-        return SimpleImportResolveResult(artists=[], warnings=["No artist names provided"])
+    if not data.artist_text.strip():
+        return SimpleImportResolveResult(artists=[], warnings=["No artist text provided"])
 
-    profiles, warnings = await resolve_artist_names(data.artist_names)
-    return SimpleImportResolveResult(artists=profiles, warnings=warnings)
+    names, extract_warnings = extract_artist_names(data.artist_text)
+    if not names:
+        return SimpleImportResolveResult(artists=[], warnings=extract_warnings or ["Could not extract any artist names from input"])
+
+    profiles, resolve_warnings = await resolve_artist_names(names)
+    return SimpleImportResolveResult(artists=profiles, warnings=extract_warnings + resolve_warnings)
 
 
 @router.post("/labels/import-simple/confirm", response_model=RosterImportResult)

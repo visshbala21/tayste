@@ -411,10 +411,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  simpleImportResolve: (labelName: string, artistNames: string[]) =>
+  simpleImportResolve: (labelName: string, artistText: string) =>
     fetchAPI<SimpleImportResolveResult>("/labels/import-simple/resolve", {
       method: "POST",
-      body: JSON.stringify({ label_name: labelName, artist_names: artistNames }),
+      body: JSON.stringify({ label_name: labelName, artist_text: artistText }),
     }),
   simpleImportConfirm: (labelName: string, artists: ResolvedArtistProfile[], runPipeline: boolean = false) =>
     fetchAPI<RosterImportResult>("/labels/import-simple/confirm", {
