@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { api, Label } from "@/lib/api";
+import { PipelinePoller } from "@/components/pipeline-poller";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,13 @@ export default async function DashboardPage() {
     // API not available yet
   }
 
+  const anyActive = labels.some(
+    (l) => l.pipeline_status === "queued" || l.pipeline_status === "running"
+  );
+
   return (
     <div>
+      <PipelinePoller status={anyActive ? "running" : undefined} />
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold mb-2 text-white tracking-tight">Labels</h1>
         <p className="text-white/40">Select a label to view its taste map and scout feed.</p>
@@ -42,12 +48,17 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-bold text-white group-hover:text-purple-200 transition">{label.name}</h2>
                     {label.pipeline_status === "queued" && (
-                      <span className="text-[11px] bg-amber-500/10 text-amber-300/80 px-2 py-0.5 rounded-full border border-amber-500/20">
+                      <span className="text-[11px] bg-amber-500/10 text-amber-300/80 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/80 animate-pulse" />
                         Queued
                       </span>
                     )}
                     {label.pipeline_status === "running" && (
-                      <span className="text-[11px] bg-purple-500/10 text-purple-300/80 px-2 py-0.5 rounded-full border border-purple-500/20">
+                      <span className="text-[11px] bg-purple-500/10 text-purple-300/80 px-2 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1.5">
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
                         Running
                       </span>
                     )}

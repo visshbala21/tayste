@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { PipelinePoller } from "@/components/pipeline-poller";
 import { ScoutFeedClient } from "./client";
 
 export default async function ScoutFeedPage({
@@ -23,6 +24,7 @@ export default async function ScoutFeedPage({
 
   return (
     <div>
+      <PipelinePoller status={label.pipeline_status} />
       {/* Breadcrumb + header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-xs text-white/35 mb-3">
