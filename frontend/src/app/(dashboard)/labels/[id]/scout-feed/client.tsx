@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type ScoutFeedItem, type Watchlist } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
@@ -24,56 +24,18 @@ export function ScoutFeedClient({
   labelId,
   pipelineStatus,
   watchlists,
+  initialWatchlistedIds = [],
 }: {
   items: ScoutFeedItem[];
   labelId: string;
   pipelineStatus?: string;
   watchlists: Watchlist[];
+  initialWatchlistedIds?: string[];
 }) {
   const router = useRouter();
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
-  const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set());
-  const [checkingWatchlists, setCheckingWatchlists] = useState(true);
+  const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set(initialWatchlistedIds));
   const [expandedScores, setExpandedScores] = useState<Set<string>>(new Set());
-
-  // Initialize watchlistAdded Set by checking which artists are already in watchlists
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      setCheckingWatchlists(false);
-      return;
-    }
-
-    const checkWatchlists = async () => {
-      if (watchlists.length === 0) {
-        setCheckingWatchlists(false);
-        return;
-      }
-
-      try {
-        const artistIdsInWatchlists = new Set<string>();
-        await Promise.all(
-          watchlists.map(async (watchlist) => {
-            try {
-              const detail = await api.getWatchlist(labelId, watchlist.id);
-              detail.items.forEach((item) => {
-                artistIdsInWatchlists.add(item.artist_id);
-              });
-            } catch (e) {
-              console.error(`Failed to fetch watchlist ${watchlist.id}:`, e);
-            }
-          })
-        );
-        setWatchlistAdded(artistIdsInWatchlists);
-      } catch (e) {
-        console.error("Failed to check watchlists:", e);
-      } finally {
-        setCheckingWatchlists(false);
-      }
-    };
-
-    checkWatchlists();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labelId]);
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {

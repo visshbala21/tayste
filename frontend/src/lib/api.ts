@@ -371,13 +371,13 @@ export interface AlertItem {
 }
 
 export const api = {
-  getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 0),
-  getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 0),
-  getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`),
+  getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 30),
+  getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 30),
+  getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`, undefined, 60),
   getScoutFeed: (id: string, limit: number = 50) =>
-    fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`, undefined, 0),
+    fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`, undefined, 15),
   getArtist: (id: string, labelId?: string) =>
-    fetchCachedAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`, undefined, 0),
+    fetchCachedAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`, undefined, 15),
   submitFeedback: (labelId: string, data: { artist_id: string; action: string; notes?: string }) =>
     fetchAPI(`/labels/${labelId}/feedback`, { method: "POST", body: JSON.stringify(data) }),
   updateArtistStage: (labelId: string, artistId: string, data: { stage: string; notes?: string }) =>
@@ -423,11 +423,11 @@ export const api = {
       body: JSON.stringify({ label_name: labelName, artists, run_pipeline: runPipeline, discovery_mode: discoveryMode }),
     }),
   getWatchlists: (labelId: string) =>
-    fetchCachedAPI<Watchlist[]>(`/labels/${labelId}/watchlists`, undefined, 0),
+    fetchCachedAPI<Watchlist[]>(`/labels/${labelId}/watchlists`, undefined, 15),
   createWatchlist: (labelId: string, data: { name: string; description?: string }) =>
     fetchAPI<Watchlist>(`/labels/${labelId}/watchlists`, { method: "POST", body: JSON.stringify(data) }),
   getWatchlist: (labelId: string, watchlistId: string) =>
-    fetchCachedAPI<WatchlistDetail>(`/labels/${labelId}/watchlists/${watchlistId}`, undefined, 0),
+    fetchCachedAPI<WatchlistDetail>(`/labels/${labelId}/watchlists/${watchlistId}`, undefined, 15),
   addToWatchlist: (labelId: string, watchlistId: string, data: { artist_id: string; notes?: string }) =>
     fetchAPI<WatchlistItem>(`/labels/${labelId}/watchlists/${watchlistId}/items`, {
       method: "POST",
@@ -436,7 +436,7 @@ export const api = {
   removeFromWatchlist: (labelId: string, watchlistId: string, artistId: string) =>
     fetchAPI(`/labels/${labelId}/watchlists/${watchlistId}/items/${artistId}`, { method: "DELETE" }),
   getAlerts: (labelId: string, status?: string, limit: number = 50) =>
-    fetchCachedAPI<AlertItem[]>(`/labels/${labelId}/alerts?limit=${limit}${status ? `&status=${status}` : ""}`, undefined, 0),
+    fetchCachedAPI<AlertItem[]>(`/labels/${labelId}/alerts?limit=${limit}${status ? `&status=${status}` : ""}`, undefined, 15),
   updateAlertStatus: (labelId: string, alertId: string, status: string) =>
     fetchAPI(`/labels/${labelId}/alerts/${alertId}/status`, {
       method: "POST",

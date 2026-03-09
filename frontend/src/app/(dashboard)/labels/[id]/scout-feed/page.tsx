@@ -19,6 +19,23 @@ export default async function ScoutFeedPage({
     api.getWatchlists(id),
   ]);
 
+  // Pre-compute which artists are already in watchlists (server-side, avoids N client-side calls)
+  let watchlistedArtistIds: string[] = [];
+  if (watchlists.length > 0) {
+    try {
+      const details = await Promise.all(
+        watchlists.map((w) => api.getWatchlist(id, w.id).catch(() => null))
+      );
+      const ids = new Set<string>();
+      for (const detail of details) {
+        if (detail) detail.items.forEach((item) => ids.add(item.artist_id));
+      }
+      watchlistedArtistIds = Array.from(ids);
+    } catch {
+      // ignore
+    }
+  }
+
   // Only show filter options that are less than or equal to total results
   const availableFilters = [20, 50, 100].filter((n) => feed.total >= n);
   const genreContext = (label.genre_tags as any)?.primary?.join(", ") || "";
@@ -79,6 +96,7 @@ export default async function ScoutFeedPage({
         labelId={id}
         pipelineStatus={label.pipeline_status}
         watchlists={watchlists}
+        initialWatchlistedIds={watchlistedArtistIds}
       />
     </div>
   );

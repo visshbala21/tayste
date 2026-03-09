@@ -1,7 +1,5 @@
 import { ImportRosterClient } from "./client";
 
-export const dynamic = "force-dynamic";
-
 export default function ImportPage() {
   return (
     <div className="page-fade">
