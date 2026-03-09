@@ -50,12 +50,18 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:3000"
 
+    # TikTok
+    tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
+
     # Genius
     genius_access_token: str = ""
 
     # Cultural signals
     cultural_max_videos_per_artist: int = 5
     cultural_max_comments_per_video: int = 200
+    cultural_max_tiktok_videos_per_artist: int = 5
+    cultural_max_comments_per_tiktok_video: int = 200
     cultural_max_genius_songs: int = 5
     cultural_max_comments_per_song: int = 50
     cultural_signal_refresh_days_hot: int = 1

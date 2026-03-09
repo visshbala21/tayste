@@ -40,7 +40,7 @@ jobs-sc-discover:
 jobs-sc-enrich:
 	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
 
-# Collect cultural signals (YouTube comments + Reddit mentions)
+# Collect cultural signals (YouTube comments + Genius annotations + TikTok videos)
 jobs-cultural-collect:
 	docker compose run --rm jobs app.jobs.collect_cultural_signals
 

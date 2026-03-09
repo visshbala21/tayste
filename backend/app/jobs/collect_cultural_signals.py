@@ -1,4 +1,4 @@
-"""Collect cultural signals: YouTube comments and Genius annotations/comments for candidate artists.
+"""Collect cultural signals: YouTube comments, Genius annotations, and TikTok videos for candidate artists.
 
 Creates CulturalSignal rows with raw comment data, commenter counts, and rule-based
 sentiment classification. Tiered refresh: hot artists daily, stable weekly.
@@ -8,10 +8,11 @@ import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select, func
 from app.db.session import async_session_factory
-from app.models.tables import Artist, PlatformAccount, ArtistFeature, CulturalSignal
+from app.models.tables import Artist, PlatformAccount, ArtistFeature, CulturalSignal, Snapshot
 from app.models.base import new_uuid
 from app.connectors.youtube import YouTubeConnector
 from app.connectors.genius import GeniusConnector
+from app.connectors.tiktok import TikTokConnector
 from app.services.sentiment import classify_batch
 from app.config import get_settings
 
@@ -195,10 +196,107 @@ async def _collect_genius_signals(
     return count
 
 
+async def _collect_tiktok_signals(
+    db, tiktok: TikTokConnector, artist_id: str, artist_name: str,
+    tiktok_handle: str | None, settings,
+) -> int:
+    """Collect TikTok video comment signals for an artist. Returns count of new signals."""
+    # Search for videos mentioning the artist by name
+    videos = await tiktok.query_videos(artist_name, max_count=settings.cultural_max_tiktok_videos_per_artist)
+    count = 0
+
+    for video in videos:
+        video_id = video["video_id"]
+
+        # Check if we already have this signal
+        existing = await db.execute(
+            select(CulturalSignal.id).where(
+                CulturalSignal.artist_id == artist_id,
+                CulturalSignal.platform == "tiktok",
+                CulturalSignal.source_id == video_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        # Fetch comments with pagination
+        all_comments = []
+        cursor = 0
+        max_comments = settings.cultural_max_comments_per_tiktok_video
+
+        while len(all_comments) < max_comments:
+            batch_size = min(100, max_comments - len(all_comments))
+            result = await tiktok.get_video_comments(video_id, max_count=batch_size, cursor=cursor)
+            all_comments.extend(result["comments"])
+            cursor = result["cursor"]
+            if not result["has_more"]:
+                break
+
+        if not all_comments:
+            continue
+
+        # Sample comments for LLM (up to 50)
+        comment_texts = [c["text"] for c in all_comments if c["text"]]
+        sampled = comment_texts[:50]
+
+        # Rule-based sentiment
+        sentiment = classify_batch(comment_texts)
+
+        total_comment_likes = sum(c["like_count"] for c in all_comments)
+
+        signal = CulturalSignal(
+            id=new_uuid(),
+            artist_id=artist_id,
+            platform="tiktok",
+            source_type="tiktok_video",
+            source_id=video_id,
+            captured_at=datetime.utcnow(),
+            comment_count=video.get("comment_count", len(all_comments)),
+            view_count=video.get("view_count", 0),
+            like_count=video.get("like_count", 0),
+            unique_commenters=len(all_comments),  # No author IDs from Research API
+            repeat_commenters=0,
+            sampled_comments=sampled,
+            rule_sentiment=sentiment,
+            extra={
+                "share_count": video.get("share_count", 0),
+                "hashtags": video.get("hashtags", []),
+                "video_description": video.get("description", ""),
+                "comment_likes_total": total_comment_likes,
+            },
+        )
+        db.add(signal)
+        count += 1
+
+    # Create a TikTok follower Snapshot if the artist has a TikTok account
+    if tiktok_handle:
+        try:
+            user_info = await tiktok.get_user_info(tiktok_handle)
+            if user_info:
+                snapshot = Snapshot(
+                    id=new_uuid(),
+                    artist_id=artist_id,
+                    platform="tiktok",
+                    captured_at=datetime.utcnow(),
+                    followers=user_info.get("follower_count", 0),
+                    likes=user_info.get("likes_count", 0),
+                    views=0,
+                    extra_metrics={
+                        "video_count": user_info.get("video_count", 0),
+                        "is_verified": user_info.get("is_verified", False),
+                    },
+                )
+                db.add(snapshot)
+        except Exception as e:
+            logger.warning(f"TikTok user info failed for {tiktok_handle}: {e}")
+
+    return count
+
+
 async def collect_artist_signals(
-    db, yt: YouTubeConnector, genius: GeniusConnector,
+    db, yt: YouTubeConnector, genius: GeniusConnector, tiktok: TikTokConnector,
     artist_id: str, artist_name: str,
-    youtube_channel_id: str | None, is_hot: bool,
+    youtube_channel_id: str | None, tiktok_handle: str | None, is_hot: bool,
 ):
     """Collect all cultural signals for a single artist."""
     settings = get_settings()
@@ -236,6 +334,16 @@ async def collect_artist_signals(
         except Exception as e:
             logger.warning(f"Genius cultural signals failed for {artist_id}: {e}")
 
+    # TikTok video comments + follower snapshot
+    if tiktok.available:
+        try:
+            tiktok_count = await _collect_tiktok_signals(
+                db, tiktok, artist_id, artist_name, tiktok_handle, settings,
+            )
+            total += tiktok_count
+        except Exception as e:
+            logger.warning(f"TikTok cultural signals failed for {artist_id}: {e}")
+
     return total
 
 
@@ -245,11 +353,17 @@ async def run():
     settings = get_settings()
     yt = YouTubeConnector()
     genius = GeniusConnector()
+    tiktok = TikTokConnector()
 
     if genius.available:
         logger.info("Genius connector available — will collect annotations + comments")
     else:
         logger.info("Genius access token not configured — skipping Genius signals")
+
+    if tiktok.available:
+        logger.info("TikTok connector available — will collect video comments + snapshots")
+    else:
+        logger.info("TikTok credentials not configured — skipping TikTok signals")
 
     async with async_session_factory() as db:
         # Get all candidate artists with platform accounts
@@ -262,10 +376,13 @@ async def run():
         )
         artist_channels: dict[str, str] = {}
         artist_names: dict[str, str] = {}
+        tiktok_handles: dict[str, str] = {}
         for artist, pa in result.all():
             artist_names[artist.id] = artist.name
             if pa.platform == "youtube":
                 artist_channels[artist.id] = pa.platform_id
+            elif pa.platform == "tiktok":
+                tiktok_handles[artist.id] = pa.platform_id
 
         # Load latest features for hot/stable classification
         features_map = {}
@@ -290,8 +407,8 @@ async def run():
                 days = 30  # default
                 is_hot_flag = _is_hot(aid, features_map, days)
                 n = await collect_artist_signals(
-                    db, yt, genius, aid, artist_names[aid],
-                    artist_channels.get(aid), is_hot_flag,
+                    db, yt, genius, tiktok, aid, artist_names[aid],
+                    artist_channels.get(aid), tiktok_handles.get(aid), is_hot_flag,
                 )
                 total_signals += n
 
