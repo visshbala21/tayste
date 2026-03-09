@@ -10,7 +10,7 @@ from app.connectors.spotify import SpotifyConnector
 from app.llm.label_dna import generate_label_dna
 from app.llm.query_expansion import expand_queries
 from app.api.schemas import LabelDNAOutput
-from app.services.emerging import EmergingSignals, evaluate_emerging_artist
+from app.services.emerging import EmergingSignals, evaluate_emerging_artist, evaluate_open_mode
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,8 @@ async def discover_for_label(db, label_id: str):
         # We still reuse these text seeds, but discovery uses Spotify/Soundcharts data.
         queries = expanded.youtube_queries[:5]
 
+    discovery_mode = getattr(label, "discovery_mode", "emerging") or "emerging"
+    open_mode = discovery_mode == "open"
     spotify = SpotifyConnector()
     discovered = 0
     spotify_budget = 25
@@ -119,18 +121,21 @@ async def discover_for_label(db, label_id: str):
                 followers = ch.get("followers") or 0
                 # Require meaningful Spotify presence — real artists have
                 # followers and popularity; genre pages and compilations don't
-                if followers < 500 or popularity < 5:
+                if not open_mode and (followers < 500 or popularity < 5):
                     continue
-                emerging = evaluate_emerging_artist(
-                    EmergingSignals(
-                        name=ch.get("name"),
-                        bio=ch.get("description"),
-                        spotify_followers=followers,
-                        spotify_popularity=popularity,
-                        total_followers=followers,
-                    ),
-                    strict=False,
-                )
+                if open_mode:
+                    emerging = evaluate_open_mode(EmergingSignals(name=ch.get("name")))
+                else:
+                    emerging = evaluate_emerging_artist(
+                        EmergingSignals(
+                            name=ch.get("name"),
+                            bio=ch.get("description"),
+                            spotify_followers=followers,
+                            spotify_popularity=popularity,
+                            total_followers=followers,
+                        ),
+                        strict=False,
+                    )
                 if not emerging.is_emerging:
                     continue
                 # No genres on Spotify usually means it's not a real artist

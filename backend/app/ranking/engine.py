@@ -9,7 +9,8 @@ from app.models.tables import (
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
-from app.services.emerging import EmergingSignals, evaluate_emerging_artist
+from app.models.tables import Label
+from app.services.emerging import EmergingDecision, EmergingSignals, evaluate_emerging_artist
 
 
 @dataclass(frozen=True)
@@ -185,7 +186,30 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
     roster_ids = set(r[0] for r in result.all())
     result = await db.execute(select(RosterMembership.artist_id).distinct())
     globally_rostered_ids = {r[0] for r in result.all()}
-    policy = _policy_for_roster_size(len(roster_ids))
+
+    # Determine discovery mode from label
+    label = await db.get(Label, label_id)
+    discovery_mode = getattr(label, "discovery_mode", "emerging") or "emerging" if label else "emerging"
+    open_mode = discovery_mode == "open"
+
+    if open_mode:
+        policy = RankingPolicy(
+            name="open_discovery",
+            fit_weight=0.55,
+            momentum_weight=0.25,
+            scale_weight=0.20,
+            risk_weight=0.25,
+            cultural_weight=0.20,
+            min_growth_7d=0.0,
+            min_growth_30d=0.0,
+            min_momentum=0.0,
+            max_risk=0.85,
+            allow_without_features=True,
+            allow_low_momentum=True,
+            min_results=40,
+        )
+    else:
+        policy = _policy_for_roster_size(len(roster_ids))
 
     # Load roster embeddings for nearest match
     roster_embeddings = {}
@@ -358,24 +382,11 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             or _to_int(feature_extra.get("spotify_popularity"))
         )
         total_followers = spotify_followers or _to_int(feature_extra.get("max_followers"))
-        strict_emerging = evaluate_emerging_artist(
-            EmergingSignals(
-                name=artist.name,
-                bio=artist.bio,
-                career_stage=soundcharts_meta.get("career_stage"),
-                spotify_followers=spotify_followers,
-                spotify_popularity=spotify_popularity,
-                total_followers=total_followers,
-                growth_7d=features.growth_7d if features else None,
-                growth_30d=features.growth_30d if features else None,
-                momentum_score=features.momentum_score if features else None,
-            ),
-            strict=True,
-        )
-        soft_emerging = strict_emerging
-        emerging_gate = "strict"
-        if not strict_emerging.is_emerging:
-            soft_emerging = evaluate_emerging_artist(
+        if open_mode:
+            emerging = EmergingDecision(is_emerging=True, reasons=("open_mode",))
+            emerging_gate = "open"
+        else:
+            strict_emerging = evaluate_emerging_artist(
                 EmergingSignals(
                     name=artist.name,
                     bio=artist.bio,
@@ -387,15 +398,32 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
                     growth_30d=features.growth_30d if features else None,
                     momentum_score=features.momentum_score if features else None,
                 ),
-                strict=False,
+                strict=True,
             )
-            if not soft_emerging.is_emerging:
-                continue
-            emerging_gate = "soft"
+            soft_emerging = strict_emerging
+            emerging_gate = "strict"
+            if not strict_emerging.is_emerging:
+                soft_emerging = evaluate_emerging_artist(
+                    EmergingSignals(
+                        name=artist.name,
+                        bio=artist.bio,
+                        career_stage=soundcharts_meta.get("career_stage"),
+                        spotify_followers=spotify_followers,
+                        spotify_popularity=spotify_popularity,
+                        total_followers=total_followers,
+                        growth_7d=features.growth_7d if features else None,
+                        growth_30d=features.growth_30d if features else None,
+                        momentum_score=features.momentum_score if features else None,
+                    ),
+                    strict=False,
+                )
+                if not soft_emerging.is_emerging:
+                    continue
+                emerging_gate = "soft"
 
-        emerging = strict_emerging if emerging_gate == "strict" else soft_emerging
-        if not emerging.is_emerging:
-            continue
+            emerging = strict_emerging if emerging_gate == "strict" else soft_emerging
+            if not emerging.is_emerging:
+                continue
 
         fallback_metrics = False
         if features:
@@ -478,6 +506,8 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
 
         if stage == "shortlist":
             payload["score_breakdown"]["note"] = "Forced include: previously shortlisted by label"
+            qualified_payloads.append(payload)
+        elif emerging_gate == "open":
             qualified_payloads.append(payload)
         elif emerging_gate == "strict" and _passes_quality_gate(features, policy):
             qualified_payloads.append(payload)

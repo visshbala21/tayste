@@ -37,6 +37,7 @@ class Label(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text)
     genre_tags: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     label_dna: Mapped[Optional[dict]] = mapped_column(JSONB)  # LabelDNAOutput
+    discovery_mode: Mapped[str] = mapped_column(String(20), default="emerging")
     pipeline_status: Mapped[str] = mapped_column(String(20), default="idle")
     pipeline_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     pipeline_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

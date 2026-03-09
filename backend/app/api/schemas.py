@@ -21,6 +21,7 @@ class LabelCreate(BaseModel):
     name: str
     description: Optional[str] = None
     genre_tags: Optional[dict] = None
+    discovery_mode: Optional[str] = "emerging"
 
 
 class LabelResponse(BaseModel):
@@ -29,6 +30,7 @@ class LabelResponse(BaseModel):
     description: Optional[str]
     genre_tags: Optional[dict]
     label_dna: Optional[dict]
+    discovery_mode: Optional[str] = None
     pipeline_status: Optional[str] = None
     pipeline_started_at: Optional[datetime] = None
     pipeline_completed_at: Optional[datetime] = None
@@ -377,3 +379,4 @@ class SimpleImportConfirmInput(BaseModel):
     label_name: str
     artists: List[ResolvedArtistProfile]
     run_pipeline: bool = False
+    discovery_mode: str = "emerging"

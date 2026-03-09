@@ -27,9 +27,12 @@ type EditableEntry = {
 
 // ---------- Simple Import ----------
 
+type DiscoveryMode = "emerging" | "open";
+
 function SimpleImport() {
   const [labelName, setLabelName] = useState("");
   const [artistText, setArtistText] = useState("");
+  const [discoveryMode, setDiscoveryMode] = useState<DiscoveryMode>("emerging");
   const [runPipeline, setRunPipeline] = useState(true);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +67,7 @@ function SimpleImport() {
         .filter((a) => a.include)
         .map(({ include, ...rest }) => rest);
 
-      const res = await api.simpleImportConfirm(labelName.trim(), artists, runPipeline);
+      const res = await api.simpleImportConfirm(labelName.trim(), artists, runPipeline, discoveryMode);
       setResult(res);
       setStep("done");
       setStatus("success");
@@ -95,6 +98,36 @@ function SimpleImport() {
               onChange={(e) => setLabelName(e.target.value)}
               placeholder="Neon Dusk Records"
             />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-sm text-white/35">Discovery Mode</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`flex-1 px-3 py-2 rounded-lg text-sm border transition ${
+                  discoveryMode === "emerging"
+                    ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                    : "bg-white/[0.03] text-white/40 border-white/[0.08] hover:text-white/60"
+                }`}
+                onClick={() => setDiscoveryMode("emerging")}
+              >
+                <div className="font-medium">Emerging Artists</div>
+                <div className="text-[11px] mt-0.5 opacity-70">Surface unsigned micro-artists</div>
+              </button>
+              <button
+                type="button"
+                className={`flex-1 px-3 py-2 rounded-lg text-sm border transition ${
+                  discoveryMode === "open"
+                    ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                    : "bg-white/[0.03] text-white/40 border-white/[0.08] hover:text-white/60"
+                }`}
+                onClick={() => setDiscoveryMode("open")}
+              >
+                <div className="font-medium">Open Discovery</div>
+                <div className="text-[11px] mt-0.5 opacity-70">Discover artists at any level who fit your sound</div>
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-2">

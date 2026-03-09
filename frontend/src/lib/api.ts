@@ -114,6 +114,7 @@ export interface Label {
   description?: string;
   genre_tags?: Record<string, string[]>;
   label_dna?: Record<string, unknown>;
+  discovery_mode?: string;
   pipeline_status?: string;
   pipeline_started_at?: string;
   pipeline_completed_at?: string;
@@ -416,10 +417,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ label_name: labelName, artist_text: artistText }),
     }),
-  simpleImportConfirm: (labelName: string, artists: ResolvedArtistProfile[], runPipeline: boolean = false) =>
+  simpleImportConfirm: (labelName: string, artists: ResolvedArtistProfile[], runPipeline: boolean = false, discoveryMode: string = "emerging") =>
     fetchAPI<RosterImportResult>("/labels/import-simple/confirm", {
       method: "POST",
-      body: JSON.stringify({ label_name: labelName, artists, run_pipeline: runPipeline }),
+      body: JSON.stringify({ label_name: labelName, artists, run_pipeline: runPipeline, discovery_mode: discoveryMode }),
     }),
   getWatchlists: (labelId: string) =>
     fetchCachedAPI<Watchlist[]>(`/labels/${labelId}/watchlists`, undefined, 0),

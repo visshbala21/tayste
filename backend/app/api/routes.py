@@ -525,6 +525,7 @@ async def import_label_from_confirm(data: RosterConfirmInput, user: Profile | No
         name=data.label.name,
         description=data.label.description,
         genre_tags=data.label.genre_tags or {},
+        discovery_mode=data.label.discovery_mode or "emerging",
         user_id=user.id if user else None,
     )
     db.add(label)
@@ -630,6 +631,7 @@ async def simple_import_confirm(
     label = Label(
         id=new_uuid(),
         name=data.label_name,
+        discovery_mode=data.discovery_mode or "emerging",
         user_id=user.id if user else None,
     )
     db.add(label)

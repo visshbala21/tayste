@@ -145,3 +145,16 @@ def evaluate_emerging_artist(signals: EmergingSignals, strict: bool = True) -> E
     if positive:
         return EmergingDecision(is_emerging=True, reasons=tuple(positive))
     return EmergingDecision(is_emerging=False, reasons=("insufficient_emerging_signal",))
+
+
+def evaluate_open_mode(signals: EmergingSignals) -> EmergingDecision:
+    """Open-mode evaluation: allow all artists unless they fail the slop name filter.
+
+    Skips career stage gates, follower/popularity caps, and bio pattern matching.
+    Only rejects names that look like playlists, compilations, or genre pages.
+    """
+    from app.jobs.discover import is_likely_slop
+
+    if is_likely_slop(signals.name):
+        return EmergingDecision(is_emerging=False, reasons=("slop_name_filter",))
+    return EmergingDecision(is_emerging=True, reasons=("open_mode",))

@@ -12,7 +12,7 @@ from app.models.base import new_uuid
 from app.connectors.spotify import SpotifyConnector
 from app.connectors.soundcharts import SoundchartsConnector
 from app.jobs.discover import is_likely_slop
-from app.services.emerging import EmergingSignals, evaluate_emerging_artist
+from app.services.emerging import EmergingSignals, evaluate_emerging_artist, evaluate_open_mode
 
 logger = logging.getLogger(__name__)
 ALLOWED_CAREER_STAGES = {"emerging", "developing"}
@@ -25,6 +25,7 @@ async def _discover_via_soundcharts(
     spotify: SpotifyConnector,
     label_id: str,
     label_name: str,
+    discovery_mode: str = "emerging",
 ) -> int:
     """Walk Soundcharts related-artists graph from roster artists with SC accounts."""
     result = await db.execute(
@@ -41,7 +42,8 @@ async def _discover_via_soundcharts(
         logger.info(f"No roster artists with Soundcharts accounts for {label_name}")
         return 0
 
-    max_candidates = 50
+    open_mode = discovery_mode == "open"
+    max_candidates = 150 if open_mode else 50
     discovered = 0
     seen_uuids: set[str] = set()
     spotify_stats_cache: dict[str, dict] = {}
@@ -93,7 +95,7 @@ async def _discover_via_soundcharts(
     for (artist_data, rel_uuid, name), profile in zip(candidates_needing_profile, profiles):
         if discovered >= max_candidates:
             break
-        if profile:
+        if profile and not open_mode:
             career_stage = (profile.get("career_stage") or "").lower()
             if career_stage and career_stage not in ALLOWED_CAREER_STAGES:
                 continue
@@ -136,17 +138,20 @@ async def _discover_via_soundcharts(
             spotify_followers = spotify_stats.get("followers")
             spotify_popularity = spotify_stats.get("popularity")
 
-        emerging = evaluate_emerging_artist(
-            EmergingSignals(
-                name=name,
-                bio=(profile or {}).get("description"),
-                career_stage=(profile or {}).get("career_stage"),
-                spotify_followers=spotify_followers,
-                spotify_popularity=spotify_popularity,
-                total_followers=spotify_followers,
-            ),
-            strict=False,
-        )
+        if open_mode:
+            emerging = evaluate_open_mode(EmergingSignals(name=name))
+        else:
+            emerging = evaluate_emerging_artist(
+                EmergingSignals(
+                    name=name,
+                    bio=(profile or {}).get("description"),
+                    career_stage=(profile or {}).get("career_stage"),
+                    spotify_followers=spotify_followers,
+                    spotify_popularity=spotify_popularity,
+                    total_followers=spotify_followers,
+                ),
+                strict=False,
+            )
         if not emerging.is_emerging:
             continue
 
@@ -212,10 +217,79 @@ async def _discover_via_soundcharts(
 
         discovered += 1
 
+    # 2-hop expansion for open mode: walk related artists of hop-1 candidates
+    if open_mode and discovered < max_candidates:
+        hop1_sc_uuids = [
+            rel_uuid for _, rel_uuid, _ in candidates_needing_profile
+            if rel_uuid in seen_uuids
+        ][:20]  # limit hop-2 seeds
+        hop2_results = await asyncio.gather(
+            *[_fetch_related(sc_uuid) for sc_uuid in hop1_sc_uuids]
+        )
+        hop2_candidates: list[tuple[dict, str, str]] = []
+        for related in hop2_results:
+            if not related:
+                continue
+            for artist_data in related:
+                rel_uuid = artist_data.get("sc_uuid", "")
+                name = artist_data.get("name", "")
+                if not rel_uuid or not name or rel_uuid in seen_uuids:
+                    continue
+                seen_uuids.add(rel_uuid)
+                if is_likely_slop(name):
+                    continue
+                hop2_candidates.append((artist_data, rel_uuid, name))
+
+        hop2_profiles = await asyncio.gather(
+            *[_fetch_profile(rel_uuid) for _, rel_uuid, _ in hop2_candidates]
+        )
+        for (artist_data, rel_uuid, name), profile in zip(hop2_candidates, hop2_profiles):
+            if discovered >= max_candidates:
+                break
+            existing = await db.execute(
+                select(PlatformAccount).where(
+                    PlatformAccount.platform == "soundcharts",
+                    PlatformAccount.platform_id == rel_uuid,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+            existing_name = await db.execute(
+                select(Artist).where(Artist.name == name)
+            )
+            if existing_name.scalar_one_or_none():
+                continue
+
+            emerging = evaluate_open_mode(EmergingSignals(name=name))
+            if not emerging.is_emerging:
+                continue
+
+            artist = Artist(
+                id=new_uuid(), name=name,
+                bio=(profile or {}).get("description"),
+                image_url=artist_data.get("image_url"),
+                genre_tags=(profile or {}).get("genres") or [],
+                is_candidate=True,
+            )
+            db.add(artist)
+            await db.flush()
+            db.add(PlatformAccount(
+                id=new_uuid(), artist_id=artist.id, platform="soundcharts",
+                platform_id=rel_uuid,
+                platform_url=f"https://app.soundcharts.com/app/artist/{artist_data.get('slug') or rel_uuid}",
+                platform_metadata={
+                    "career_stage": (profile or {}).get("career_stage"),
+                    "genres": (profile or {}).get("genres") or [],
+                    "emerging_reasons": list(emerging.reasons),
+                    "hop": 2,
+                },
+            ))
+            discovered += 1
+
     return discovered
 
 
-async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsConnector, label_id: str, label_name: str) -> int:
+async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsConnector, label_id: str, label_name: str, discovery_mode: str = "emerging") -> int:
     """Fallback: walk Spotify related-artists graph (requires user-auth OAuth token)."""
     result = await db.execute(
         select(PlatformAccount.platform_id, PlatformAccount.artist_id)
@@ -230,6 +304,7 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
     if not roster_spotify:
         return 0
 
+    open_mode = discovery_mode == "open"
     discovered = 0
     seen_spotify_ids: set[str] = set()
 
@@ -279,17 +354,20 @@ async def _discover_via_spotify(db, spotify: SpotifyConnector, sc: SoundchartsCo
                     sc_slug = None
                     sc_profile = None
 
-            emerging = evaluate_emerging_artist(
-                EmergingSignals(
-                    name=name,
-                    bio=(sc_profile or {}).get("description"),
-                    career_stage=(sc_profile or {}).get("career_stage"),
-                    spotify_followers=followers,
-                    spotify_popularity=popularity,
-                    total_followers=followers,
-                ),
-                strict=False,
-            )
+            if open_mode:
+                emerging = evaluate_open_mode(EmergingSignals(name=name))
+            else:
+                emerging = evaluate_emerging_artist(
+                    EmergingSignals(
+                        name=name,
+                        bio=(sc_profile or {}).get("description"),
+                        career_stage=(sc_profile or {}).get("career_stage"),
+                        spotify_followers=followers,
+                        spotify_popularity=popularity,
+                        total_followers=followers,
+                    ),
+                    strict=False,
+                )
             if not emerging.is_emerging:
                 continue
 
@@ -354,18 +432,19 @@ async def pull_graph_for_label(db, label_id: str):
     if not label:
         return
 
+    discovery_mode = getattr(label, "discovery_mode", "emerging") or "emerging"
     sc = SoundchartsConnector()
     spotify = SpotifyConnector()
     discovered = 0
 
     # Primary: Soundcharts related artists (works on Starter tier)
     if sc.available:
-        discovered = await _discover_via_soundcharts(db, sc, spotify, label_id, label.name)
+        discovered = await _discover_via_soundcharts(db, sc, spotify, label_id, label.name, discovery_mode)
 
     # Fallback: Spotify related artists (needs user-auth OAuth, may 403 with client credentials)
     if discovered == 0 and spotify.available:
         logger.info(f"SC discovery found 0, trying Spotify graph fallback for {label.name}")
-        discovered = await _discover_via_spotify(db, spotify, sc, label_id, label.name)
+        discovered = await _discover_via_spotify(db, spotify, sc, label_id, label.name, discovery_mode)
 
     await db.flush()
     logger.info(f"Discovered {discovered} candidates via related-artist graph for label {label.name}")
