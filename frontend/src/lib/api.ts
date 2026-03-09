@@ -249,6 +249,24 @@ export interface CulturalProfile {
   };
 }
 
+export interface ResolvedArtistProfile {
+  name: string;
+  query_name: string;
+  image_url?: string;
+  genres?: string[];
+  spotify?: { platform: string; platform_id?: string; platform_url?: string };
+  youtube?: { platform: string; platform_id?: string; platform_url?: string };
+  soundcharts?: { platform: string; platform_id?: string; platform_url?: string };
+  spotify_followers?: number;
+  spotify_popularity?: number;
+  resolved: boolean;
+}
+
+export interface SimpleImportResolveResult {
+  artists: ResolvedArtistProfile[];
+  warnings: string[];
+}
+
 export interface RosterImportPayload {
   label: {
     name: string;
@@ -392,6 +410,16 @@ export const api = {
     fetchAPI<RosterImportResult>("/labels/import-confirm", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+  simpleImportResolve: (labelName: string, artistNames: string[]) =>
+    fetchAPI<SimpleImportResolveResult>("/labels/import-simple/resolve", {
+      method: "POST",
+      body: JSON.stringify({ label_name: labelName, artist_names: artistNames }),
+    }),
+  simpleImportConfirm: (labelName: string, artists: ResolvedArtistProfile[], runPipeline: boolean = false) =>
+    fetchAPI<RosterImportResult>("/labels/import-simple/confirm", {
+      method: "POST",
+      body: JSON.stringify({ label_name: labelName, artists, run_pipeline: runPipeline }),
     }),
   getWatchlists: (labelId: string) =>
     fetchCachedAPI<Watchlist[]>(`/labels/${labelId}/watchlists`, undefined, 0),

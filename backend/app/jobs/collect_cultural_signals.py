@@ -1,4 +1,4 @@
-"""Collect cultural signals: YouTube comments for candidate artists.
+"""Collect cultural signals: YouTube comments and Reddit threads for candidate artists.
 
 Creates CulturalSignal rows with raw comment data, commenter counts, and rule-based
 sentiment classification. Tiered refresh: hot artists daily, stable weekly.
@@ -11,6 +11,7 @@ from app.db.session import async_session_factory
 from app.models.tables import Artist, PlatformAccount, ArtistFeature, CulturalSignal
 from app.models.base import new_uuid
 from app.connectors.youtube import YouTubeConnector
+from app.connectors.reddit import RedditConnector
 from app.services.sentiment import classify_batch
 from app.config import get_settings
 
@@ -108,10 +109,106 @@ async def _collect_youtube_signals(
     return count
 
 
+async def _collect_reddit_signals(
+    db, reddit: RedditConnector, artist_id: str, artist_name: str,
+    genre_tags: list[str], settings,
+) -> int:
+    """Collect Reddit thread signals for an artist. Returns count of new signals."""
+    subreddits = reddit.get_subreddits_for_genres(genre_tags)
+    count = 0
+
+    for subreddit in subreddits:
+        try:
+            posts = await reddit.search_artist_posts(
+                artist_name, subreddit,
+                limit=settings.cultural_max_posts_per_subreddit,
+                time_filter="month",
+            )
+        except Exception as e:
+            logger.warning(f"Reddit search failed for '{artist_name}' in r/{subreddit}: {e}")
+            continue
+
+        for post in posts:
+            post_id = post["post_id"]
+            source_id = f"{subreddit}:{post_id}"
+
+            # Skip already collected
+            existing = await db.execute(
+                select(CulturalSignal.id).where(
+                    CulturalSignal.artist_id == artist_id,
+                    CulturalSignal.platform == "reddit",
+                    CulturalSignal.source_id == source_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+
+            if post["num_comments"] == 0:
+                continue
+
+            try:
+                comments = await reddit.get_post_comments(
+                    subreddit, post_id,
+                    limit=settings.cultural_max_comments_per_post,
+                )
+            except Exception as e:
+                logger.warning(f"Reddit comments failed for post {post_id}: {e}")
+                continue
+
+            if not comments:
+                continue
+
+            # Count unique/repeat commenters
+            author_counts: dict[str, int] = {}
+            for c in comments:
+                h = c["author_hash"]
+                if h:
+                    author_counts[h] = author_counts.get(h, 0) + 1
+
+            unique = len(author_counts)
+            repeat = sum(1 for v in author_counts.values() if v > 1)
+
+            comment_texts = [c["text"] for c in comments if c["text"]]
+            sampled = comment_texts[:50]
+
+            sentiment = classify_batch(comment_texts)
+
+            total_replies = sum(c["reply_count"] for c in comments)
+            total_score = sum(c["score"] for c in comments)
+
+            signal = CulturalSignal(
+                id=new_uuid(),
+                artist_id=artist_id,
+                platform="reddit",
+                source_type="reddit_thread",
+                source_id=source_id,
+                captured_at=datetime.utcnow(),
+                comment_count=len(comments),
+                view_count=0,
+                like_count=total_score,
+                reply_count=total_replies,
+                unique_commenters=unique,
+                repeat_commenters=repeat,
+                sampled_comments=sampled,
+                rule_sentiment=sentiment,
+                extra={
+                    "subreddit": subreddit,
+                    "post_title": post["title"],
+                    "post_url": post["url"],
+                    "post_score": post["score"],
+                },
+            )
+            db.add(signal)
+            count += 1
+
+    return count
+
+
 async def collect_artist_signals(
-    db, yt: YouTubeConnector,
+    db, yt: YouTubeConnector, reddit: RedditConnector,
     artist_id: str, artist_name: str,
-    youtube_channel_id: str | None, is_hot: bool,
+    youtube_channel_id: str | None, genre_tags: list[str],
+    is_hot: bool,
 ):
     """Collect all cultural signals for a single artist."""
     settings = get_settings()
@@ -139,6 +236,16 @@ async def collect_artist_signals(
         except Exception as e:
             logger.warning(f"YouTube cultural signals failed for {artist_id}: {e}")
 
+    # Reddit threads
+    if reddit.available:
+        try:
+            reddit_count = await _collect_reddit_signals(
+                db, reddit, artist_id, artist_name, genre_tags, settings,
+            )
+            total += reddit_count
+        except Exception as e:
+            logger.warning(f"Reddit cultural signals failed for {artist_id}: {e}")
+
     return total
 
 
@@ -147,22 +254,30 @@ async def run():
     logger.info("Starting cultural signal collection...")
     settings = get_settings()
     yt = YouTubeConnector()
+    reddit = RedditConnector()
+
+    if reddit.available:
+        logger.info("Reddit connector available — will collect Reddit signals")
+    else:
+        logger.info("Reddit credentials not configured — skipping Reddit signals")
 
     async with async_session_factory() as db:
-        # Get all candidate artists with YouTube accounts
+        # Get all candidate artists with platform accounts
         result = await db.execute(
             select(Artist, PlatformAccount).join(
                 PlatformAccount, Artist.id == PlatformAccount.artist_id
             ).where(
                 Artist.is_candidate == True,
-                PlatformAccount.platform == "youtube",
             )
         )
-        artist_channels = {}
-        artist_names = {}
+        artist_channels: dict[str, str] = {}
+        artist_names: dict[str, str] = {}
+        artist_genre_tags: dict[str, list[str]] = {}
         for artist, pa in result.all():
-            artist_channels[artist.id] = pa.platform_id
             artist_names[artist.id] = artist.name
+            artist_genre_tags[artist.id] = artist.genre_tags or []
+            if pa.platform == "youtube":
+                artist_channels[artist.id] = pa.platform_id
 
         # Load latest features for hot/stable classification
         features_map = {}
@@ -187,8 +302,10 @@ async def run():
                 days = 30  # default
                 is_hot_flag = _is_hot(aid, features_map, days)
                 n = await collect_artist_signals(
-                    db, yt, aid, artist_names[aid],
-                    artist_channels.get(aid), is_hot_flag,
+                    db, yt, reddit, aid, artist_names[aid],
+                    artist_channels.get(aid),
+                    artist_genre_tags.get(aid, []),
+                    is_hot_flag,
                 )
                 total_signals += n
 

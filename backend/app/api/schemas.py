@@ -346,3 +346,34 @@ class ArtistBriefOutput(BaseModel):
     why_fit: str
     risks_unknowns: str
     next_actions: List[str]
+
+
+# --- Simple Import ---
+
+class SimpleImportInput(BaseModel):
+    label_name: str
+    artist_names: List[str]
+
+
+class ResolvedArtistProfile(BaseModel):
+    name: str
+    query_name: str
+    image_url: Optional[str] = None
+    genres: Optional[List[str]] = None
+    spotify: Optional[PlatformEntry] = None
+    youtube: Optional[PlatformEntry] = None
+    soundcharts: Optional[PlatformEntry] = None
+    spotify_followers: Optional[int] = None
+    spotify_popularity: Optional[int] = None
+    resolved: bool = False
+
+
+class SimpleImportResolveResult(BaseModel):
+    artists: List[ResolvedArtistProfile]
+    warnings: List[str] = []
+
+
+class SimpleImportConfirmInput(BaseModel):
+    label_name: str
+    artists: List[ResolvedArtistProfile]
+    run_pipeline: bool = False

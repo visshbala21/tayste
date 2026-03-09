@@ -7,7 +7,7 @@ export default function ImportPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 text-white">Roster Import</h1>
-        <p className="text-white/60">Paste any roster text and let the platform normalize it.</p>
+        <p className="text-white/60">Import your roster by typing artist names or pasting structured data.</p>
       </div>
       <ImportRosterClient />
     </div>

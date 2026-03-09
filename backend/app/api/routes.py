@@ -23,6 +23,8 @@ from app.api.schemas import (
     AlertResponse, AlertStatusInput, StageUpdateInput,
     LabelImportInput, RosterImportInput, RosterImportResult, RosterParsedArtist,
     RosterConfirmInput, RosterConfirmExistingInput, CulturalProfileResponse,
+    SimpleImportInput, SimpleImportResolveResult, SimpleImportConfirmInput,
+    ResolvedArtistProfile, PlatformEntry,
 )
 from app.llm.roster_parse import parse_roster_text
 from app.connectors.identity import detect_platform_from_url, extract_platform_id
@@ -531,6 +533,107 @@ async def import_label_from_confirm(data: RosterConfirmInput, user: Profile | No
 
     created, skipped, import_warnings = await _upsert_roster_entries(
         db, label.id, entries, data.default_platform
+    )
+    await db.commit()
+
+    if data.run_pipeline:
+        await _enqueue_pipeline(label.id)
+
+    return RosterImportResult(
+        label_id=label.id,
+        label_name=label.name,
+        parsed_count=len(entries),
+        created_count=len(created),
+        skipped_count=len(skipped),
+        parsed=entries,
+        created=created,
+        skipped=skipped,
+        warnings=import_warnings,
+    )
+
+
+@router.post("/labels/import-simple/resolve", response_model=SimpleImportResolveResult)
+async def simple_import_resolve(
+    data: SimpleImportInput,
+    user: Profile | None = Depends(get_optional_user),
+):
+    """Resolve artist names to platform profiles for simple import."""
+    from app.services.resolve_artists import resolve_artist_names
+
+    if not data.artist_names:
+        return SimpleImportResolveResult(artists=[], warnings=["No artist names provided"])
+
+    profiles, warnings = await resolve_artist_names(data.artist_names)
+    return SimpleImportResolveResult(artists=profiles, warnings=warnings)
+
+
+@router.post("/labels/import-simple/confirm", response_model=RosterImportResult)
+async def simple_import_confirm(
+    data: SimpleImportConfirmInput,
+    user: Profile | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm simple import — converts resolved profiles to roster entries and creates label."""
+    if not data.artists:
+        return RosterImportResult(
+            label_id=None,
+            label_name=data.label_name,
+            parsed_count=0,
+            created_count=0,
+            skipped_count=0,
+            parsed=[],
+            created=[],
+            skipped=[],
+            warnings=["No artists provided"],
+        )
+
+    # Convert ResolvedArtistProfile to RosterParsedArtist
+    entries: list[RosterParsedArtist] = []
+    for p in data.artists:
+        additional_platforms: list[PlatformEntry] = []
+        primary_platform = None
+        primary_id = None
+        primary_url = None
+
+        # Use Spotify as primary if available
+        if p.spotify and p.spotify.platform_id:
+            primary_platform = "spotify"
+            primary_id = p.spotify.platform_id
+            primary_url = p.spotify.platform_url
+        elif p.youtube and p.youtube.platform_id:
+            primary_platform = "youtube"
+            primary_id = p.youtube.platform_id
+            primary_url = p.youtube.platform_url
+
+        # Add remaining platforms as additional
+        if p.youtube and p.youtube.platform_id and primary_platform != "youtube":
+            additional_platforms.append(p.youtube)
+        if p.spotify and p.spotify.platform_id and primary_platform != "spotify":
+            additional_platforms.append(p.spotify)
+        if p.soundcharts and p.soundcharts.platform_id:
+            additional_platforms.append(p.soundcharts)
+
+        entries.append(RosterParsedArtist(
+            name=p.name,
+            platform=primary_platform,
+            platform_id=primary_id,
+            platform_url=primary_url,
+            genre_tags=p.genres or [],
+            additional_platforms=additional_platforms or None,
+        ))
+
+    # Create label
+    label = Label(
+        id=new_uuid(),
+        name=data.label_name,
+        user_id=user.id if user else None,
+    )
+    db.add(label)
+    await db.flush()
+    await _ensure_default_watchlist(db, label.id)
+
+    created, skipped, import_warnings = await _upsert_roster_entries(
+        db, label.id, entries, "spotify"
     )
     await db.commit()
 

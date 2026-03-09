@@ -50,9 +50,16 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:3000"
 
+    # Reddit
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    reddit_user_agent: str = "tayste:v1.0.0 (by /u/tayste-ai)"
+
     # Cultural signals
     cultural_max_videos_per_artist: int = 5
     cultural_max_comments_per_video: int = 200
+    cultural_max_posts_per_subreddit: int = 10
+    cultural_max_comments_per_post: int = 50
     cultural_signal_refresh_days_hot: int = 1
     cultural_signal_refresh_days_stable: int = 7
 
