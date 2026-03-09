@@ -156,7 +156,7 @@ export function WatchlistPickerButton({
   };
 
   if (added) {
-    return <span className="text-xs text-accent px-3 py-1">Watching</span>;
+    return <span className="text-xs text-white/60 px-3 py-1">Watching</span>;
   }
 
   if (checkingAdded || (loadingLists && listOptions.length === 0)) {
@@ -164,7 +164,7 @@ export function WatchlistPickerButton({
       <button
         type="button"
         disabled
-        className={buttonClassName || "text-xs bg-surface-light text-muted px-3 py-1 rounded"}
+        className={buttonClassName || "text-xs bg-white/[0.03] text-white/40 px-3 py-1 rounded border border-white/[0.06]"}
       >
         Loading...
       </button>
@@ -175,7 +175,7 @@ export function WatchlistPickerButton({
     return (
       <Link
         href={`/labels/${labelId}/watchlists`}
-        className="text-xs bg-surface-light text-muted px-3 py-1 rounded hover:bg-border transition-all duration-200"
+        className="text-xs bg-white/[0.03] text-white/40 px-3 py-1 rounded border border-white/[0.06] hover:bg-white/[0.05] transition-all duration-200"
       >
         Create Watchlist
       </Link>
@@ -189,19 +189,19 @@ export function WatchlistPickerButton({
         onClick={() => setOpen((v) => !v)}
         className={
           buttonClassName ||
-          "text-xs bg-accent/10 text-accent px-3 py-1 rounded hover:bg-accent/20 transition-all duration-200"
+          "text-xs bg-white/[0.03] text-white/40 px-3 py-1 rounded border border-white/[0.06] hover:bg-white/[0.05] transition-all duration-200"
         }
       >
         {buttonLabel}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-border bg-surface p-3 shadow-xl">
-          <p className="mb-2 text-xs text-muted">Add to watchlist</p>
+        <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-white/[0.06] bg-[#0a0a10] p-3">
+          <p className="mb-2 text-xs text-white/35">Add to watchlist</p>
           <select
             value={selectedWatchlistId}
             onChange={(e) => setSelectedWatchlistId(e.target.value)}
-            className="w-full rounded border border-border bg-surface-light px-2 py-1.5 text-xs text-gray-200"
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-purple-500/30"
           >
             {listOptions.map((watchlist) => (
               <option key={watchlist.id} value={watchlist.id}>
@@ -211,18 +211,18 @@ export function WatchlistPickerButton({
           </select>
 
           {selectedWatchlist && (
-            <p className="mt-1 text-[11px] text-muted">
+            <p className="mt-1 text-[11px] text-white/35">
               {selectedWatchlist.item_count} artists
             </p>
           )}
 
-          {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
 
           <div className="mt-3 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-xs bg-surface-light text-muted px-2.5 py-1 rounded hover:bg-border transition-all duration-200"
+              className="text-xs bg-white/[0.03] text-white/40 px-2.5 py-1 rounded border border-white/[0.06] hover:bg-white/[0.05] transition-all duration-200"
             >
               Cancel
             </button>
@@ -230,7 +230,7 @@ export function WatchlistPickerButton({
               type="button"
               onClick={addToWatchlist}
               disabled={!selectedWatchlistId || saving}
-              className="text-xs bg-accent/10 text-accent px-2.5 py-1 rounded hover:bg-accent/20 transition-all duration-200 disabled:opacity-60"
+              className="text-xs bg-purple-500/10 text-purple-300 px-2.5 py-1 rounded border border-purple-500/20 hover:bg-purple-500/15 transition-all duration-200 disabled:opacity-60"
             >
               {saving ? "Adding..." : "Add"}
             </button>
@@ -238,7 +238,7 @@ export function WatchlistPickerButton({
 
           <Link
             href={`/labels/${labelId}/watchlists`}
-            className="mt-3 block text-[11px] text-muted hover:text-gray-300 transition-colors"
+            className="mt-3 block text-[11px] text-white/35 hover:text-purple-300 transition-colors"
           >
             Manage watchlists
           </Link>

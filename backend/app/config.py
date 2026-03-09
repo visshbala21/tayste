@@ -44,18 +44,11 @@ class Settings(BaseSettings):
     llm_timeout: int = 30
     llm_max_retries: int = 3
 
-    # Auth / JWT
-    jwt_secret: str = ""
-    jwt_algorithm: str = "HS256"
-    jwt_expiration_hours: int = 168  # 7 days
-    google_client_id: str = ""
-    frontend_url: str = "http://localhost:3000"
+    # Supabase
+    supabase_url: str = ""
+    supabase_jwt_secret: str = ""
 
-    # Email (SendGrid)
-    sendgrid_api_key: str = ""
-    from_email: str = "noreply@tayste.app"
-    email_verification_expiry_hours: int = 24
-    password_reset_expiry_hours: int = 1
+    frontend_url: str = "http://localhost:3000"
 
     # Cultural signals
     cultural_max_videos_per_artist: int = 5

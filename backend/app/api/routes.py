@@ -8,7 +8,7 @@ from app.models.tables import (
     Label, Artist, PlatformAccount, RosterMembership,
     Snapshot, LabelCluster, ArtistFeature, Recommendation,
     Feedback, ArtistLLMBrief, Watchlist, WatchlistItem, Alert, LabelArtistState,
-    AlertRule, User, ArtistCulturalProfile,
+    AlertRule, Profile, ArtistCulturalProfile,
 )
 from app.models.base import new_uuid
 from app.api.schemas import (
@@ -276,7 +276,7 @@ async def _upsert_roster_entries(
     return created, skipped, warnings
 
 
-async def _get_user_label(db: AsyncSession, label_id: str, user: User | None) -> Label:
+async def _get_user_label(db: AsyncSession, label_id: str, user: Profile | None) -> Label:
     """Load a label and verify ownership. Raises 404 or 403."""
     label = await db.get(Label, label_id)
     if not label:
@@ -291,7 +291,7 @@ def _enqueue_pipeline(label_id: str):
     return pipeline_queue.enqueue(label_id, replace=True)
 
 @router.post("/labels", response_model=LabelResponse)
-async def create_label(data: LabelCreate, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def create_label(data: LabelCreate, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = Label(id=new_uuid(), name=data.name, description=data.description, genre_tags=data.genre_tags or {}, user_id=user.id if user else None)
     db.add(label)
     await db.flush()
@@ -301,7 +301,7 @@ async def create_label(data: LabelCreate, user: User | None = Depends(get_option
 
 
 @router.get("/labels", response_model=list[LabelResponse])
-async def list_labels(user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def list_labels(user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     query = select(Label)
     if user:
         query = query.where(Label.user_id == user.id)
@@ -310,13 +310,13 @@ async def list_labels(user: User | None = Depends(get_optional_user), db: AsyncS
 
 
 @router.get("/labels/{label_id}", response_model=LabelResponse)
-async def get_label(label_id: str, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def get_label(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
     return label
 
 
 @router.post("/labels/{label_id}/roster")
-async def add_roster(label_id: str, data: RosterInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def add_roster(label_id: str, data: RosterInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
 
     added = []
@@ -366,7 +366,7 @@ async def add_roster(label_id: str, data: RosterInput, user: User | None = Depen
 
 
 @router.post("/labels/import-text", response_model=RosterImportResult)
-async def import_label_from_text(data: LabelImportInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def import_label_from_text(data: LabelImportInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     parsed = parse_roster_text(data.raw_text, data.default_platform)
     entries = parsed.artists
     if not entries:
@@ -433,7 +433,7 @@ async def import_label_from_file(
     resolve_missing: bool = Form(True),
     dry_run: bool = Form(False),
     run_pipeline: bool = Form(False),
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     data = await file.read()
@@ -503,7 +503,7 @@ async def import_label_from_file(
 
 
 @router.post("/labels/import-confirm", response_model=RosterImportResult)
-async def import_label_from_confirm(data: RosterConfirmInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def import_label_from_confirm(data: RosterConfirmInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     entries = data.artists
     if not entries:
         return RosterImportResult(
@@ -552,7 +552,7 @@ async def import_label_from_confirm(data: RosterConfirmInput, user: User | None 
 
 @router.post("/labels/{label_id}/roster/import-text", response_model=RosterImportResult)
 async def import_roster_from_text(
-    label_id: str, data: RosterImportInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)
+    label_id: str, data: RosterImportInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)
 ):
     label = await _get_user_label(db, label_id, user)
 
@@ -609,7 +609,7 @@ async def import_roster_from_file(
     resolve_missing: bool = Form(True),
     dry_run: bool = Form(False),
     run_pipeline: bool = Form(False),
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     label = await _get_user_label(db, label_id, user)
@@ -664,7 +664,7 @@ async def import_roster_from_file(
 
 @router.post("/labels/{label_id}/roster/import-confirm", response_model=RosterImportResult)
 async def import_roster_from_confirm(
-    label_id: str, data: RosterConfirmExistingInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)
+    label_id: str, data: RosterConfirmExistingInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)
 ):
     label = await _get_user_label(db, label_id, user)
 
@@ -703,7 +703,7 @@ async def import_roster_from_confirm(
     )
 
 @router.get("/labels/{label_id}/taste-map", response_model=TasteMapResponse)
-async def get_taste_map(label_id: str, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def get_taste_map(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
 
     result = await db.execute(
@@ -744,7 +744,7 @@ async def get_taste_map(label_id: str, user: User | None = Depends(get_optional_
 
 
 @router.get("/labels/{label_id}/scout-feed", response_model=ScoutFeedResponse)
-async def get_scout_feed(label_id: str, limit: int = 50, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def get_scout_feed(label_id: str, limit: int = 50, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
 
     cluster_result = await db.execute(
@@ -889,7 +889,7 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: User | None = Dep
 async def get_artist_detail(
     artist_id: str,
     label_id: str | None = None,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     artist = await db.get(Artist, artist_id)
@@ -1008,7 +1008,7 @@ async def get_artist_detail(
 
 
 @router.post("/labels/{label_id}/feedback", response_model=FeedbackResponse)
-async def submit_feedback(label_id: str, data: FeedbackInput, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def submit_feedback(label_id: str, data: FeedbackInput, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
 
     artist = await db.get(Artist, data.artist_id)
@@ -1033,7 +1033,7 @@ async def update_artist_stage(
     label_id: str,
     artist_id: str,
     data: StageUpdateInput,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     label = await _get_user_label(db, label_id, user)
@@ -1045,7 +1045,7 @@ async def update_artist_stage(
 
 
 @router.get("/labels/{label_id}/watchlists", response_model=list[WatchlistResponse])
-async def list_watchlists(label_id: str, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def list_watchlists(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
     await _ensure_default_watchlist(db, label_id)
     result = await db.execute(
@@ -1075,7 +1075,7 @@ async def list_watchlists(label_id: str, user: User | None = Depends(get_optiona
 async def create_watchlist(
     label_id: str,
     data: WatchlistCreate,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     label = await _get_user_label(db, label_id, user)
@@ -1104,7 +1104,7 @@ async def create_watchlist(
 async def get_watchlist_detail(
     label_id: str,
     watchlist_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_user_label(db, label_id, user)
@@ -1154,7 +1154,7 @@ async def add_watchlist_item(
     label_id: str,
     watchlist_id: str,
     data: WatchlistItemInput,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_user_label(db, label_id, user)
@@ -1210,7 +1210,7 @@ async def remove_watchlist_item(
     label_id: str,
     watchlist_id: str,
     artist_id: str,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_user_label(db, label_id, user)
@@ -1236,7 +1236,7 @@ async def list_alerts(
     label_id: str,
     status: str | None = None,
     limit: int = 50,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     label = await _get_user_label(db, label_id, user)
@@ -1269,7 +1269,7 @@ async def update_alert_status(
     label_id: str,
     alert_id: str,
     data: AlertStatusInput,
-    user: User | None = Depends(get_optional_user),
+    user: Profile | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_user_label(db, label_id, user)
@@ -1282,7 +1282,7 @@ async def update_alert_status(
 
 
 @router.post("/labels/{label_id}/llm/refresh")
-async def refresh_label_llm(label_id: str, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def refresh_label_llm(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     """Regenerate Label DNA via LLM."""
     from app.llm.label_dna import generate_label_dna
     label = await _get_user_label(db, label_id, user)
@@ -1293,7 +1293,7 @@ async def refresh_label_llm(label_id: str, user: User | None = Depends(get_optio
 
 
 @router.post("/artists/{artist_id}/llm/refresh")
-async def refresh_artist_llm(artist_id: str, label_id: str = None, user: User | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def refresh_artist_llm(artist_id: str, label_id: str = None, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     """Regenerate artist scouting brief via LLM."""
     from app.llm.artist_brief import generate_artist_brief
     artist = await db.get(Artist, artist_id)

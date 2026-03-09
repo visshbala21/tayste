@@ -1,12 +1,10 @@
 "use client";
 
+import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-/* ── Shared components matching login page ─────────────────────── */
+/* -- Shared components matching login page ----------------------------- */
 
 function DoodleOverlay() {
   return (
@@ -62,16 +60,18 @@ function TaysteLogo() {
   );
 }
 
-/* ── Main page ─────────────────────────────────────────────────── */
+/* -- Main page --------------------------------------------------------- */
 
 export default function SignupPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const supabase = createClient();
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -90,18 +90,19 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+      const { error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+        },
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Signup failed");
+      if (authError) {
+        throw new Error(authError.message);
       }
 
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -109,16 +110,41 @@ export default function SignupPage() {
     }
   }
 
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="max-w-sm w-full mx-auto flex flex-col items-center gap-6 text-center px-8">
+          <Link href="/">
+            <TaysteLogo />
+          </Link>
+          <div className="w-16 h-16 rounded-full bg-violet-50 flex items-center justify-center">
+            <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+          <p className="text-sm text-gray-500">
+            We&apos;ve sent a verification link to <span className="font-medium text-gray-900">{email}</span>.
+            Click the link to verify your account.
+          </p>
+          <Link href="/login" className="text-sm font-medium text-primary hover:text-primary-light transition-colors">
+            Back to sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex bg-white">
-      {/* ── Left panel: form ─────────────────────────────────── */}
+      {/* -- Left panel: form ----------------------------------------- */}
       <div className="w-full lg:w-[48%] flex flex-col justify-between px-8 sm:px-16 py-10">
         {/* Logo */}
         <Link href="/">
           <TaysteLogo />
         </Link>
 
-        {/* Form area – vertically centred */}
+        {/* Form area -- vertically centred */}
         <div className="max-w-sm w-full mx-auto flex flex-col gap-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Create your account</h1>
@@ -221,7 +247,7 @@ export default function SignupPage() {
         <div />
       </div>
 
-      {/* ── Right panel: hero image area ─────────────────────── */}
+      {/* -- Right panel: hero image area ----------------------------- */}
       <div className="hidden lg:block lg:w-[52%] relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-950 via-gray-900 to-black" />
         <div

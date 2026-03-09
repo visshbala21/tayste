@@ -14,7 +14,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tayste}"]
       interval: 5s
-      
+
       timeout: 3s
       retries: 10
 
@@ -35,8 +35,7 @@ services:
       SOUNDCHARTS_APP_ID: ${SOUNDCHARTS_APP_ID:-}
       SOUNDCHARTS_API_KEY: ${SOUNDCHARTS_API_KEY:-}
       SOUNDCHARTS_API_BASE: ${SOUNDCHARTS_API_BASE:-https://customer.api.soundcharts.com}
-      JWT_SECRET: ${JWT_SECRET:-changeme-dev-only}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       db:
@@ -58,9 +57,8 @@ services:
       # the container, exposed as 8001 on the host.
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
       INTERNAL_API_URL: http://backend:8000
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      AUTH_SECRET: ${AUTH_SECRET:-changeme-dev-only}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
     depends_on:
       - backend
     volumes:

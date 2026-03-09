@@ -13,23 +13,23 @@ export default async function WatchlistsPage({ params }: { params: Promise<{ id:
   return (
     <div>
       <div className="mb-6">
-        <div className="flex items-center gap-2 text-xs text-muted mb-3">
-          <Link href="/dashboard" className="hover:text-gray-200 transition-colors duration-200">Labels</Link>
+        <div className="flex items-center gap-2 text-xs text-white/35 mb-3">
+          <Link href="/dashboard" className="hover:text-purple-300 transition-colors duration-200">Labels</Link>
           <span>/</span>
-          <span className="text-gray-400">{label.name}</span>
+          <span className="text-white/35">{label.name}</span>
           <span>/</span>
-          <span className="text-gray-200">Watchlists</span>
+          <span className="text-white">Watchlists</span>
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{label.name}</h1>
-            <p className="text-muted text-sm mt-1">Watchlists &amp; Alerts</p>
+            <h1 className="text-2xl font-bold text-white">{label.name}</h1>
+            <p className="text-white/60 text-sm mt-1">Watchlists &amp; Alerts</p>
           </div>
           <div className="flex gap-3">
-            <Link href={`/labels/${id}/scout-feed`} className="text-sm bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-all duration-200">
+            <Link href={`/labels/${id}/scout-feed`} className="text-sm text-purple-300/80 hover:text-purple-200 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-200">
               Scout Feed
             </Link>
-            <Link href={`/labels/${id}/taste-map`} className="text-sm bg-accent/10 text-accent px-3 py-1.5 rounded-lg hover:bg-accent/20 transition-all duration-200">
+            <Link href={`/labels/${id}/taste-map`} className="text-sm text-purple-300/80 hover:text-purple-200 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-200">
               Taste Map
             </Link>
           </div>

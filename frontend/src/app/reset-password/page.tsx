@@ -1,32 +1,17 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { useState, Suspense } from "react";
 import Link from "next/link";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 function ResetPasswordContent() {
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
-
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  if (!token) {
-    return (
-      <div className="bg-surface border border-border rounded-2xl p-8 w-full max-w-sm flex flex-col items-center gap-6 text-center">
-        <h1 className="text-xl font-semibold text-white">Invalid link</h1>
-        <p className="text-sm text-muted">This password reset link is invalid or has expired.</p>
-        <Link href="/forgot-password" className="text-sm text-primary-light hover:text-primary transition-colors">
-          Request a new link
-        </Link>
-      </div>
-    );
-  }
+  const supabase = createClient();
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
@@ -45,15 +30,12 @@ function ResetPasswordContent() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+      const { error: authError } = await supabase.auth.updateUser({
+        password,
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Reset failed");
+      if (authError) {
+        throw new Error(authError.message);
       }
 
       setSuccess(true);

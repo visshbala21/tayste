@@ -169,26 +169,26 @@ export function ImportRosterClient() {
   const disabled = !labelName.trim() || (!rawText.trim() && !file) || status === "loading";
 
   return (
-    <div className="bg-surface border border-border rounded-lg p-6 animate-bounce-in">
+    <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Import Roster</h2>
+        <h2 className="text-xl font-bold text-white">Import Roster</h2>
         <Link
           href="/dashboard"
-          className="text-sm text-primary hover:text-primary-light transition px-3 py-1.5 rounded bg-primary/10"
+          className="text-sm text-white/40 hover:text-white/60 transition px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05]"
         >
           Back to Dashboard
         </Link>
       </div>
-      <p className="text-muted mb-6">
+      <p className="text-white/60 mb-6">
         Paste raw roster text or upload a file (PDF, XLSX, CSV, JSON). We will parse it with an LLM,
         resolve missing YouTube IDs, and optionally run the discovery pipeline.
       </p>
 
       <form onSubmit={onPreview} className="grid gap-4">
         <div className="grid gap-2">
-          <label className="text-sm text-muted">Label Name</label>
+          <label className="text-sm text-white/35">Label Name</label>
           <input
-            className="bg-surface-light border border-border rounded px-3 py-2"
+            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
             value={labelName}
             onChange={(e) => setLabelName(e.target.value)}
             placeholder="Neon Dusk Records"
@@ -196,9 +196,9 @@ export function ImportRosterClient() {
         </div>
 
         <div className="grid gap-2">
-          <label className="text-sm text-muted">Label Description (optional)</label>
+          <label className="text-sm text-white/35">Label Description (optional)</label>
           <input
-            className="bg-surface-light border border-border rounded px-3 py-2"
+            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Atmospheric, guitar-driven indie..."
@@ -206,9 +206,9 @@ export function ImportRosterClient() {
         </div>
 
         <div className="grid gap-2">
-          <label className="text-sm text-muted">Primary Genres (comma-separated)</label>
+          <label className="text-sm text-white/35">Primary Genres (comma-separated)</label>
           <input
-            className="bg-surface-light border border-border rounded px-3 py-2"
+            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
             value={primaryGenres}
             onChange={(e) => setPrimaryGenres(e.target.value)}
             placeholder="dream-pop, post-punk, ambient"
@@ -216,9 +216,9 @@ export function ImportRosterClient() {
         </div>
 
         <div className="grid gap-2">
-          <label className="text-sm text-muted">Roster Text</label>
+          <label className="text-sm text-white/35">Roster Text</label>
           <textarea
-            className="bg-surface-light border border-border rounded px-3 py-2 min-h-[24rem]"
+            className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 min-h-[24rem] text-white/80 placeholder-white/25 focus:outline-none focus:border-purple-500/30"
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             placeholder={`${sampleJson}\n\nFreeform examples:\nVelvet Collapse - https://youtube.com/channel/UC...\nPale Meridian - https://open.spotify.com/artist/4Z8W30...\nGhost Antenna (post-punk, darkwave)\n@duskprotocol https://youtube.com/@duskprotocol`}
@@ -227,10 +227,10 @@ export function ImportRosterClient() {
             type="file"
             accept=".txt,.csv,.tsv,.json,.xlsx,.pdf"
             onChange={onFileChange}
-            className="text-sm text-muted"
+            className="text-sm text-white/35"
           />
           {file && (
-            <div className="text-xs text-muted">Using file: {file.name} (file takes precedence over pasted text)</div>
+            <div className="text-xs text-white/35">Using file: {file.name} (file takes precedence over pasted text)</div>
           )}
         </div>
 
@@ -241,7 +241,7 @@ export function ImportRosterClient() {
             checked={resolveMissing}
             onChange={(e) => setResolveMissing(e.target.checked)}
           />
-          <label htmlFor="resolve-missing" className="text-sm text-muted">
+          <label htmlFor="resolve-missing" className="text-sm text-white/60">
             Resolve missing YouTube IDs by search
           </label>
         </div>
@@ -253,7 +253,7 @@ export function ImportRosterClient() {
             checked={runPipeline}
             onChange={(e) => setRunPipeline(e.target.checked)}
           />
-          <label htmlFor="run-pipeline" className="text-sm text-muted">
+          <label htmlFor="run-pipeline" className="text-sm text-white/60">
             Run discovery pipeline after import
           </label>
         </div>
@@ -261,7 +261,7 @@ export function ImportRosterClient() {
         {step === "input" && (
           <button
             type="submit"
-            className="bg-primary text-white rounded px-4 py-2 disabled:opacity-50"
+            className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
             disabled={disabled}
           >
             {status === "loading" ? "Parsing..." : "Preview Parse"}
@@ -274,15 +274,15 @@ export function ImportRosterClient() {
       )}
 
       {step === "review" && result && (
-        <div className="mt-6 bg-surface-light border border-border rounded p-4 text-sm animate-bounce-in">
-          <div className="font-semibold mb-2">Review Parsed Roster</div>
-          <div className="text-muted mb-2">
+        <div className="mt-6 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 text-sm">
+          <div className="font-bold mb-2 text-white">Review Parsed Roster</div>
+          <div className="text-white/60 mb-2">
             Parsed {result.parsed_count} entries. Review and confirm before importing.
           </div>
           {result.warnings?.length > 0 && (
             <div className="mt-3">
-              <div className="font-semibold">Warnings</div>
-              <ul className="list-disc pl-5">
+              <div className="font-bold text-white">Warnings</div>
+              <ul className="list-disc pl-5 text-white/60">
                 {result.warnings.map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
@@ -292,7 +292,7 @@ export function ImportRosterClient() {
 
           <div className="mt-4 grid gap-3">
             {entries.map((entry, idx) => (
-              <div key={idx} className="grid gap-2 border border-border rounded p-3">
+              <div key={idx} className="grid gap-2 border border-white/[0.06] rounded-xl p-3">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -304,7 +304,7 @@ export function ImportRosterClient() {
                     }}
                   />
                   <input
-                    className="bg-surface border border-border rounded px-2 py-1 flex-1"
+                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 flex-1 text-white/80 focus:outline-none focus:border-purple-500/30"
                     value={entry.name}
                     onChange={(e) => {
                       const next = [...entries];
@@ -316,7 +316,7 @@ export function ImportRosterClient() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <input
-                    className="bg-surface border border-border rounded px-2 py-1"
+                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-purple-500/30"
                     value={entry.platform || ""}
                     onChange={(e) => {
                       const next = [...entries];
@@ -326,7 +326,7 @@ export function ImportRosterClient() {
                     placeholder="platform (youtube)"
                   />
                   <input
-                    className="bg-surface border border-border rounded px-2 py-1"
+                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 text-white/80 focus:outline-none focus:border-purple-500/30"
                     value={entry.platform_id || ""}
                     onChange={(e) => {
                       const next = [...entries];
@@ -336,7 +336,7 @@ export function ImportRosterClient() {
                     placeholder="platform_id (UC...)"
                   />
                   <input
-                    className="bg-surface border border-border rounded px-2 py-1 md:col-span-2"
+                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 md:col-span-2 text-white/80 focus:outline-none focus:border-purple-500/30"
                     value={entry.platform_url || ""}
                     onChange={(e) => {
                       const next = [...entries];
@@ -347,15 +347,15 @@ export function ImportRosterClient() {
                   />
                   {entry.additional_platforms && entry.additional_platforms.length > 0 && (
                     entry.additional_platforms.map((ap, apIdx) => (
-                      <div key={apIdx} className="md:col-span-2 flex items-center gap-2 text-xs text-muted bg-surface/50 border border-border/50 rounded px-2 py-1.5">
-                        <span className="text-primary-light font-medium">{ap.platform}</span>
+                      <div key={apIdx} className="md:col-span-2 flex items-center gap-2 text-xs text-white/35 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1.5">
+                        <span className="text-white/60 font-medium">{ap.platform}</span>
                         {ap.platform_id && <span className="truncate">{ap.platform_id}</span>}
                         {ap.platform_url && <span className="truncate opacity-70">{ap.platform_url}</span>}
                       </div>
                     ))
                   )}
                   <input
-                    className="bg-surface border border-border rounded px-2 py-1 md:col-span-2"
+                    className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-2 py-1 md:col-span-2 text-white/80 focus:outline-none focus:border-purple-500/30"
                     value={entry.genre_input}
                     onChange={(e) => {
                       const next = [...entries];
@@ -372,14 +372,14 @@ export function ImportRosterClient() {
           <div className="mt-4 flex gap-3">
             <button
               type="button"
-              className="bg-surface border border-border rounded px-4 py-2"
+              className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-2 text-white/40 hover:bg-white/[0.05]"
               onClick={() => setStep("input")}
             >
               Back
             </button>
             <button
               type="button"
-              className="bg-primary text-white rounded px-4 py-2 disabled:opacity-50"
+              className="bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded-lg px-4 py-2 hover:bg-purple-500/15 transition disabled:opacity-50"
               onClick={onConfirm}
               disabled={status === "loading"}
             >
@@ -390,25 +390,25 @@ export function ImportRosterClient() {
       )}
 
       {step === "done" && result && (
-        <div className="mt-6 bg-surface-light border border-border rounded p-4 text-sm animate-bounce-in">
-          <div className="font-semibold mb-2">Import Complete</div>
-          <div className="text-muted mb-2">
+        <div className="mt-6 bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 text-sm">
+          <div className="font-bold mb-2 text-white">Import Complete</div>
+          <div className="text-white/60 mb-2">
             Parsed {result.parsed_count} entries, created {result.created_count}, skipped {result.skipped_count}.
           </div>
           {runPipeline && (
-            <div className="mb-2 text-xs text-accent-light">
+            <div className="mb-2 text-xs text-white/60">
               Pipeline queued. You can follow status on the dashboard.
             </div>
           )}
           {result.label_id && (
-            <div className="text-muted">
-              Label ID: <span className="text-primary-light">{result.label_id}</span>
+            <div className="text-white/60">
+              Label ID: <span className="text-white/60">{result.label_id}</span>
             </div>
           )}
           {result.warnings?.length > 0 && (
             <div className="mt-3">
-              <div className="font-semibold">Warnings</div>
-              <ul className="list-disc pl-5">
+              <div className="font-bold text-white">Warnings</div>
+              <ul className="list-disc pl-5 text-white/60">
                 {result.warnings.map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}

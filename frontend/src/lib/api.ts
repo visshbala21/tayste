@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 
 // Server-side (SSR) uses Docker internal network; client-side uses the browser-accessible URL.
 const SERVER_API_BASE = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
@@ -8,28 +8,37 @@ function getApiBase(): string {
   return typeof window === "undefined" ? SERVER_API_BASE : CLIENT_API_BASE;
 }
 
+// Server auth is registered at runtime by server components importing api-server-init.ts.
+// This avoids bundling next/headers into client component builds.
+let _serverAuthFn: (() => Promise<string | null>) | null = null;
+
+/** Called from api-server-init.ts (imported by server components only) */
+export function _registerServerAuth(fn: () => Promise<string | null>) {
+  _serverAuthFn = fn;
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   if (typeof window === "undefined") {
-    // Server-side: read from NextAuth session
-    try {
-      const session = await auth();
-      if (session?.backendToken) {
-        return { Authorization: `Bearer ${session.backendToken}` };
+    // Server-side: use registered auth function if available
+    if (_serverAuthFn) {
+      try {
+        const token = await _serverAuthFn();
+        if (token) {
+          return { Authorization: `Bearer ${token}` };
+        }
+      } catch {
+        // fall through
       }
-    } catch {
-      // auth() may fail outside request context
     }
     return {};
   }
 
-  // Client-side: fetch session from NextAuth API
+  // Client-side: use Supabase browser client
   try {
-    const res = await fetch("/api/auth/session");
-    if (res.ok) {
-      const session = await res.json();
-      if (session?.backendToken) {
-        return { Authorization: `Bearer ${session.backendToken}` };
-      }
+    const supabase = createBrowserSupabase();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { Authorization: `Bearer ${session.access_token}` };
     }
   } catch {
     // ignore
@@ -60,7 +69,7 @@ async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidate
     ...options,
     headers: { "Content-Type": "application/json", ...authHeaders, ...options?.headers },
   };
-  
+
   // For server-side rendering, configure caching
   if (typeof window === "undefined") {
     if (revalidateSeconds === 0) {
@@ -69,7 +78,7 @@ async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidate
       (fetchOptions as any).next = { revalidate: revalidateSeconds };
     }
   }
-  
+
   const res = await fetch(`${getApiBase()}/api${path}`, fetchOptions);
   if (res.status === 401 && typeof window !== "undefined") {
     window.location.href = "/login";

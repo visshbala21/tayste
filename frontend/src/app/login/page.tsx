@@ -1,10 +1,10 @@
 "use client";
 
-import { signIn } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import Link from "next/link";
 
-/* ── Inline SVG doodles for the hero panel ─────────────────────── */
+/* -- Inline SVG doodles for the hero panel ----------------------------- */
 
 function DoodleOverlay() {
   return (
@@ -15,7 +15,7 @@ function DoodleOverlay() {
       xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="xMidYMid slice"
     >
-      {/* X marks – top-right cluster */}
+      {/* X marks -- top-right cluster */}
       <g stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round">
         <line x1="470" y1="80" x2="490" y2="100" />
         <line x1="490" y1="80" x2="470" y2="100" />
@@ -23,7 +23,7 @@ function DoodleOverlay() {
         <line x1="525" y1="60" x2="510" y2="75" />
       </g>
 
-      {/* Heart – lower-right */}
+      {/* Heart -- lower-right */}
       <path
         d="M480 680 C480 660, 510 640, 510 660 C510 640, 540 660, 540 680 C540 710, 510 730, 510 740 C510 730, 480 710, 480 680Z"
         stroke="#8b5cf6"
@@ -32,7 +32,7 @@ function DoodleOverlay() {
         strokeLinejoin="round"
       />
 
-      {/* 4-point star – middle-right */}
+      {/* 4-point star -- middle-right */}
       <path
         d="M530 400 L540 370 L550 400 L580 410 L550 420 L540 450 L530 420 L500 410Z"
         stroke="#8b5cf6"
@@ -107,7 +107,7 @@ function GoogleIcon() {
   );
 }
 
-/* ── Main page ─────────────────────────────────────────────────── */
+/* -- Main page --------------------------------------------------------- */
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -116,20 +116,21 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const supabase = createClient();
+
   async function handleCredentialsLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
-        redirect: false,
       });
 
-      if (result?.error) {
-        setError(result.error);
+      if (authError) {
+        setError(authError.message);
       } else {
         window.location.href = "/dashboard";
       }
@@ -140,16 +141,25 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogleLogin() {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  }
+
   return (
     <div className="min-h-screen flex bg-white">
-      {/* ── Left panel: form ─────────────────────────────────── */}
+      {/* -- Left panel: form ----------------------------------------- */}
       <div className="w-full lg:w-[48%] flex flex-col justify-between px-8 sm:px-16 py-10">
         {/* Logo */}
         <Link href="/">
           <TaysteLogo />
         </Link>
 
-        {/* Form area – vertically centred */}
+        {/* Form area -- vertically centred */}
         <div className="max-w-sm w-full mx-auto flex flex-col gap-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
@@ -190,7 +200,7 @@ export default function LoginPage() {
               </label>
               <input
                 type="password"
-                placeholder="••••••••"
+                placeholder="--------"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -231,7 +241,7 @@ export default function LoginPage() {
 
           {/* Google */}
           <button
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            onClick={handleGoogleLogin}
             className="w-full flex items-center justify-center gap-3 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <GoogleIcon />
@@ -254,7 +264,7 @@ export default function LoginPage() {
         <div />
       </div>
 
-      {/* ── Right panel: hero image area ─────────────────────── */}
+      {/* -- Right panel: hero image area ----------------------------- */}
       <div className="hidden lg:block lg:w-[52%] relative overflow-hidden">
         {/* Dark gradient base */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-950 via-gray-900 to-black" />
@@ -269,7 +279,7 @@ export default function LoginPage() {
           }}
         />
 
-        {/* Artistic silhouette – gradient shape */}
+        {/* Artistic silhouette -- gradient shape */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-[70%] h-[75%]">
             {/* Main figure silhouette using layered gradients */}
