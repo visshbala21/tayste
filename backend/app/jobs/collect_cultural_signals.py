@@ -1,4 +1,4 @@
-"""Collect cultural signals: YouTube comments and Reddit threads for candidate artists.
+"""Collect cultural signals: YouTube comments and Genius annotations/comments for candidate artists.
 
 Creates CulturalSignal rows with raw comment data, commenter counts, and rule-based
 sentiment classification. Tiered refresh: hot artists daily, stable weekly.
@@ -11,7 +11,7 @@ from app.db.session import async_session_factory
 from app.models.tables import Artist, PlatformAccount, ArtistFeature, CulturalSignal
 from app.models.base import new_uuid
 from app.connectors.youtube import YouTubeConnector
-from app.connectors.reddit import RedditConnector
+from app.connectors.genius import GeniusConnector
 from app.services.sentiment import classify_batch
 from app.config import get_settings
 
@@ -109,106 +109,96 @@ async def _collect_youtube_signals(
     return count
 
 
-async def _collect_reddit_signals(
-    db, reddit: RedditConnector, artist_id: str, artist_name: str,
-    genre_tags: list[str], settings,
+async def _collect_genius_signals(
+    db, genius: GeniusConnector, artist_id: str, artist_name: str, settings,
 ) -> int:
-    """Collect Reddit thread signals for an artist. Returns count of new signals."""
-    subreddits = reddit.get_subreddits_for_genres(genre_tags)
+    """Collect Genius annotation + comment signals for an artist. Returns count of new signals."""
+    songs = await genius.search_artist_songs(artist_name, max_songs=settings.cultural_max_genius_songs)
     count = 0
 
-    for subreddit in subreddits:
-        try:
-            posts = await reddit.search_artist_posts(
-                artist_name, subreddit,
-                limit=settings.cultural_max_posts_per_subreddit,
-                time_filter="month",
+    for song in songs:
+        song_id = song["song_id"]
+        source_id = f"genius:{song_id}"
+
+        # Skip already collected
+        existing = await db.execute(
+            select(CulturalSignal.id).where(
+                CulturalSignal.artist_id == artist_id,
+                CulturalSignal.platform == "genius",
+                CulturalSignal.source_id == source_id,
             )
-        except Exception as e:
-            logger.warning(f"Reddit search failed for '{artist_name}' in r/{subreddit}: {e}")
+        )
+        if existing.scalar_one_or_none():
             continue
 
-        for post in posts:
-            post_id = post["post_id"]
-            source_id = f"{subreddit}:{post_id}"
+        # Fetch comments
+        comments = await genius.get_song_comments(
+            song_id, per_page=settings.cultural_max_comments_per_song,
+        )
 
-            # Skip already collected
-            existing = await db.execute(
-                select(CulturalSignal.id).where(
-                    CulturalSignal.artist_id == artist_id,
-                    CulturalSignal.platform == "reddit",
-                    CulturalSignal.source_id == source_id,
-                )
-            )
-            if existing.scalar_one_or_none():
-                continue
+        # Fetch annotations (referents)
+        referents = await genius.get_song_referents(song_id, per_page=20)
 
-            if post["num_comments"] == 0:
-                continue
+        # Combine comment texts + annotation texts for sentiment analysis
+        all_texts: list[str] = []
+        all_texts.extend(c["text"] for c in comments if c["text"])
+        all_texts.extend(r["text"] for r in referents if r["text"])
 
-            try:
-                comments = await reddit.get_post_comments(
-                    subreddit, post_id,
-                    limit=settings.cultural_max_comments_per_post,
-                )
-            except Exception as e:
-                logger.warning(f"Reddit comments failed for post {post_id}: {e}")
-                continue
+        if not all_texts:
+            continue
 
-            if not comments:
-                continue
+        # Count unique commenters (from comments only)
+        author_counts: dict[str, int] = {}
+        for c in comments:
+            h = c["author_hash"]
+            if h:
+                author_counts[h] = author_counts.get(h, 0) + 1
 
-            # Count unique/repeat commenters
-            author_counts: dict[str, int] = {}
-            for c in comments:
-                h = c["author_hash"]
-                if h:
-                    author_counts[h] = author_counts.get(h, 0) + 1
+        unique = len(author_counts)
+        repeat = sum(1 for v in author_counts.values() if v > 1)
 
-            unique = len(author_counts)
-            repeat = sum(1 for v in author_counts.values() if v > 1)
+        sampled = all_texts[:50]
+        sentiment = classify_batch(all_texts)
 
-            comment_texts = [c["text"] for c in comments if c["text"]]
-            sampled = comment_texts[:50]
+        total_votes = sum(c["votes_total"] for c in comments) + sum(r["votes_total"] for r in referents)
+        total_replies = sum(c["reply_count"] for c in comments)
+        verified_annotations = sum(1 for r in referents if r.get("verified"))
 
-            sentiment = classify_batch(comment_texts)
+        song_stats = song.get("stats", {})
 
-            total_replies = sum(c["reply_count"] for c in comments)
-            total_score = sum(c["score"] for c in comments)
-
-            signal = CulturalSignal(
-                id=new_uuid(),
-                artist_id=artist_id,
-                platform="reddit",
-                source_type="reddit_thread",
-                source_id=source_id,
-                captured_at=datetime.utcnow(),
-                comment_count=len(comments),
-                view_count=0,
-                like_count=total_score,
-                reply_count=total_replies,
-                unique_commenters=unique,
-                repeat_commenters=repeat,
-                sampled_comments=sampled,
-                rule_sentiment=sentiment,
-                extra={
-                    "subreddit": subreddit,
-                    "post_title": post["title"],
-                    "post_url": post["url"],
-                    "post_score": post["score"],
-                },
-            )
-            db.add(signal)
-            count += 1
+        signal = CulturalSignal(
+            id=new_uuid(),
+            artist_id=artist_id,
+            platform="genius",
+            source_type="song_annotations",
+            source_id=source_id,
+            captured_at=datetime.utcnow(),
+            comment_count=len(comments),
+            view_count=song_stats.get("pageviews", 0),
+            like_count=total_votes,
+            reply_count=total_replies,
+            unique_commenters=unique,
+            repeat_commenters=repeat,
+            sampled_comments=sampled,
+            rule_sentiment=sentiment,
+            extra={
+                "song_title": song["title"],
+                "song_url": song["url"],
+                "annotation_count": song.get("annotation_count", 0),
+                "referents_sampled": len(referents),
+                "verified_annotations": verified_annotations,
+            },
+        )
+        db.add(signal)
+        count += 1
 
     return count
 
 
 async def collect_artist_signals(
-    db, yt: YouTubeConnector, reddit: RedditConnector,
+    db, yt: YouTubeConnector, genius: GeniusConnector,
     artist_id: str, artist_name: str,
-    youtube_channel_id: str | None, genre_tags: list[str],
-    is_hot: bool,
+    youtube_channel_id: str | None, is_hot: bool,
 ):
     """Collect all cultural signals for a single artist."""
     settings = get_settings()
@@ -236,15 +226,15 @@ async def collect_artist_signals(
         except Exception as e:
             logger.warning(f"YouTube cultural signals failed for {artist_id}: {e}")
 
-    # Reddit threads
-    if reddit.available:
+    # Genius annotations + comments
+    if genius.available:
         try:
-            reddit_count = await _collect_reddit_signals(
-                db, reddit, artist_id, artist_name, genre_tags, settings,
+            genius_count = await _collect_genius_signals(
+                db, genius, artist_id, artist_name, settings,
             )
-            total += reddit_count
+            total += genius_count
         except Exception as e:
-            logger.warning(f"Reddit cultural signals failed for {artist_id}: {e}")
+            logger.warning(f"Genius cultural signals failed for {artist_id}: {e}")
 
     return total
 
@@ -254,12 +244,12 @@ async def run():
     logger.info("Starting cultural signal collection...")
     settings = get_settings()
     yt = YouTubeConnector()
-    reddit = RedditConnector()
+    genius = GeniusConnector()
 
-    if reddit.available:
-        logger.info("Reddit connector available — will collect Reddit signals")
+    if genius.available:
+        logger.info("Genius connector available — will collect annotations + comments")
     else:
-        logger.info("Reddit credentials not configured — skipping Reddit signals")
+        logger.info("Genius access token not configured — skipping Genius signals")
 
     async with async_session_factory() as db:
         # Get all candidate artists with platform accounts
@@ -272,10 +262,8 @@ async def run():
         )
         artist_channels: dict[str, str] = {}
         artist_names: dict[str, str] = {}
-        artist_genre_tags: dict[str, list[str]] = {}
         for artist, pa in result.all():
             artist_names[artist.id] = artist.name
-            artist_genre_tags[artist.id] = artist.genre_tags or []
             if pa.platform == "youtube":
                 artist_channels[artist.id] = pa.platform_id
 
@@ -302,10 +290,8 @@ async def run():
                 days = 30  # default
                 is_hot_flag = _is_hot(aid, features_map, days)
                 n = await collect_artist_signals(
-                    db, yt, reddit, aid, artist_names[aid],
-                    artist_channels.get(aid),
-                    artist_genre_tags.get(aid, []),
-                    is_hot_flag,
+                    db, yt, genius, aid, artist_names[aid],
+                    artist_channels.get(aid), is_hot_flag,
                 )
                 total_signals += n
 
