@@ -1,4 +1,5 @@
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+import { cache } from "react";
 
 // Server-side (SSR) uses Docker internal network; client-side uses the browser-accessible URL.
 const SERVER_API_BASE = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
@@ -11,37 +12,50 @@ function getApiBase(): string {
 // Server auth is registered at runtime by server components importing api-server-init.ts.
 // This avoids bundling next/headers into client component builds.
 let _serverAuthFn: (() => Promise<string | null>) | null = null;
+const CLIENT_AUTH_CACHE_MS = 1500;
+let _clientTokenCache: { token: string | null; expiresAt: number } | null = null;
 
 /** Called from api-server-init.ts (imported by server components only) */
 export function _registerServerAuth(fn: () => Promise<string | null>) {
   _serverAuthFn = fn;
 }
 
+const getServerAccessToken = cache(async (): Promise<string | null> => {
+  if (!_serverAuthFn) return null;
+  try {
+    return await _serverAuthFn();
+  } catch {
+    return null;
+  }
+});
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   if (typeof window === "undefined") {
-    // Server-side: use registered auth function if available
-    if (_serverAuthFn) {
-      try {
-        const token = await _serverAuthFn();
-        if (token) {
-          return { Authorization: `Bearer ${token}` };
-        }
-      } catch {
-        // fall through
-      }
+    const token = await getServerAccessToken();
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
     }
     return {};
   }
 
   // Client-side: use Supabase browser client
+  const now = Date.now();
+  if (_clientTokenCache && _clientTokenCache.expiresAt > now) {
+    return _clientTokenCache.token
+      ? { Authorization: `Bearer ${_clientTokenCache.token}` }
+      : {};
+  }
+
   try {
     const supabase = createBrowserSupabase();
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` };
+    const token = session?.access_token || null;
+    _clientTokenCache = { token, expiresAt: now + CLIENT_AUTH_CACHE_MS };
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
     }
   } catch {
-    // ignore
+    _clientTokenCache = { token: null, expiresAt: now + 250 };
   }
   return {};
 }

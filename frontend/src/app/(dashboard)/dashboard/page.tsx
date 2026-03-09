@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   const displayName = user?.user_metadata?.name || user?.user_metadata?.full_name || "there";
 
   let labels: Label[] = [];

@@ -1,12 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useActiveLabel } from "@/lib/label-context";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+const LAST_LABEL_KEY = "tayste:last-label-id";
 
 export function NavBar() {
   const pathname = usePathname();
-  const { activeLabelId } = useActiveLabel();
+  const searchParams = useSearchParams();
+  const [lastLabelId, setLastLabelId] = useState<string | null>(null);
+
+  const activeLabelFromRoute = useMemo(() => {
+    const labelMatch = pathname.match(/^\/labels\/([^/]+)/);
+    if (labelMatch?.[1]) {
+      return decodeURIComponent(labelMatch[1]);
+    }
+
+    const labelFromQuery = searchParams.get("label");
+    return labelFromQuery || null;
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (activeLabelFromRoute) {
+      window.localStorage.setItem(LAST_LABEL_KEY, activeLabelFromRoute);
+      setLastLabelId(activeLabelFromRoute);
+      return;
+    }
+
+    setLastLabelId(window.localStorage.getItem(LAST_LABEL_KEY));
+  }, [activeLabelFromRoute]);
+
+  const activeLabelId = activeLabelFromRoute || lastLabelId;
 
   const links = [
     { label: "Home", href: "/dashboard" },
