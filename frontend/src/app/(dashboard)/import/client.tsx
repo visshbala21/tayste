@@ -282,10 +282,10 @@ function SimpleImport() {
           </div>
           {result.label_id && (
             <Link
-              href={`/labels/${result.label_id}`}
+              href={`/labels/${result.label_id}/scout-feed`}
               className="inline-block mt-4 text-sm text-purple-300 hover:text-purple-200 transition"
             >
-              Go to Dashboard →
+              Go to Scout Feed →
             </Link>
           )}
         </div>
