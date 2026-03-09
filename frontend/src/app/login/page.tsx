@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 /* -- Inline SVG doodles for the hero panel ----------------------------- */
@@ -115,6 +116,8 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("next") || "/dashboard";
 
   const supabase = createClient();
 
@@ -132,7 +135,7 @@ export default function LoginPage() {
       if (authError) {
         setError(authError.message);
       } else {
-        window.location.href = "/dashboard";
+        window.location.href = redirectTo;
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -145,7 +148,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
   }

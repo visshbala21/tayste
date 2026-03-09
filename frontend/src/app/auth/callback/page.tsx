@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("next") || "/dashboard";
 
   useEffect(() => {
     const supabase = createClient();
@@ -14,7 +16,7 @@ export default function AuthCallbackPage() {
     // and exchanges them using the same browser client that initiated the OAuth flow
     supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        router.replace("/dashboard");
+        router.replace(redirectTo);
       }
     });
 

@@ -54,7 +54,7 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
@@ -81,7 +81,7 @@ async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidate
 
   const res = await fetch(`${getApiBase()}/api${path}`, fetchOptions);
   if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
@@ -99,7 +99,7 @@ async function fetchMultipart<T>(path: string, form: FormData): Promise<T> {
     cache: "no-store",
   });
   if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     throw new Error("Unauthorized");
   }
   if (!res.ok) {

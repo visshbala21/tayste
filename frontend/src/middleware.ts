@@ -31,7 +31,11 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     const url = request.nextUrl.clone();
+    const returnTo = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
+    if (returnTo && returnTo !== "/dashboard") {
+      url.searchParams.set("next", returnTo);
+    }
     return NextResponse.redirect(url);
   }
 

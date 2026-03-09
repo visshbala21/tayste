@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { SignOutButton } from "./sign-out-button";
 import "@/lib/api-server-init";
 
@@ -10,7 +11,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    // Preserve the current path so login can redirect back
+    const headersList = await headers();
+    const url = headersList.get("x-next-url") || headersList.get("x-invoke-path") || "";
+    const next = url && url !== "/dashboard" ? `?next=${encodeURIComponent(url)}` : "";
+    redirect(`/login${next}`);
   }
 
   const name = user.user_metadata?.name || user.user_metadata?.full_name || null;
