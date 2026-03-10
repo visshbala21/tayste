@@ -310,15 +310,27 @@ function SimpleImport() {
           <div className="text-sm text-white/60 space-y-1">
             <p>Created {result.created_count} artists for <span className="text-white/80">{result.label_name}</span></p>
             {result.skipped_count > 0 && <p>Skipped {result.skipped_count} (already existed)</p>}
-            {runPipeline && <p className="text-xs text-white/40">Discovery pipeline queued.</p>}
+            {runPipeline && (
+              <p className="text-xs text-white/40">
+                Discovery pipeline queued. This typically takes 3–5 minutes.
+              </p>
+            )}
           </div>
           {result.label_id && (
-            <Link
-              href={`/labels/${result.label_id}/scout-feed`}
-              className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px mt-4"
-            >
-              Go to Scout Feed &rarr;
-            </Link>
+            <div className="flex gap-3 mt-4">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px"
+              >
+                Go to Dashboard
+              </Link>
+              <Link
+                href={`/labels/${result.label_id}/scout-feed`}
+                className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
+              >
+                View Scout Feed
+              </Link>
+            </div>
           )}
         </div>
       )}
@@ -626,12 +638,7 @@ function AdvancedImport() {
           </div>
           {runPipeline && (
             <div className="mb-2 text-xs text-white/60">
-              Pipeline queued. You can follow status on the dashboard.
-            </div>
-          )}
-          {result.label_id && (
-            <div className="text-white/60">
-              Label ID: <span className="text-white/60">{result.label_id}</span>
+              Discovery pipeline queued. This typically takes 3–5 minutes.
             </div>
           )}
           {result.warnings?.length > 0 && (
@@ -642,6 +649,22 @@ function AdvancedImport() {
                   <li key={i}>{w}</li>
                 ))}
               </ul>
+            </div>
+          )}
+          {result.label_id && (
+            <div className="flex gap-3 mt-4">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px"
+              >
+                Go to Dashboard
+              </Link>
+              <Link
+                href={`/labels/${result.label_id}/scout-feed`}
+                className="inline-flex items-center rounded-pill px-5 py-2 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
+              >
+                View Scout Feed
+              </Link>
             </div>
           )}
         </div>

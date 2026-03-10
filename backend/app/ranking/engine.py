@@ -165,9 +165,10 @@ def _max_normalized_similarity(
     return _normalized_cosine(best_sim)
 
 
-async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendation]:
+async def rank_candidates(db: AsyncSession, label_id: str, batch_id: str | None = None) -> list[Recommendation]:
     """Score and rank candidate artists for a label."""
-    batch_id = new_uuid()
+    if batch_id is None:
+        batch_id = new_uuid()
 
     # Load label clusters
     result = await db.execute(

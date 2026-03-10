@@ -3,7 +3,7 @@ import numpy as np
 import re
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional
@@ -142,6 +142,7 @@ async def cluster_label_artists(
     db: AsyncSession,
     label_id: str,
     n_clusters: int | None = None,
+    batch_id: str | None = None,
 ) -> list[dict]:
     """Cluster a label's roster artists and store centroids."""
     # Get roster artist IDs
@@ -187,14 +188,12 @@ async def cluster_label_artists(
     labels = kmeans.fit_predict(scaled)
     centroids = scaler.inverse_transform(kmeans.cluster_centers_)
 
-    # Clear old clusters
-    await db.execute(text("DELETE FROM label_clusters WHERE label_id = :lid"), {"lid": label_id})
-
     clusters = []
     for ci in range(n_clusters):
         cluster_artist_ids = [aid_map[i] for i in range(len(labels)) if labels[i] == ci]
         cluster = LabelCluster(
-            id=new_uuid(), label_id=label_id, cluster_index=ci,
+            id=new_uuid(), label_id=label_id, batch_id=batch_id,
+            cluster_index=ci,
             centroid=centroids[ci].tolist(),
             artist_ids=cluster_artist_ids,
         )

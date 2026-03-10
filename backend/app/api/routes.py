@@ -25,6 +25,7 @@ from app.api.schemas import (
     RosterConfirmInput, RosterConfirmExistingInput, CulturalProfileResponse,
     SimpleImportInput, SimpleImportResolveResult, SimpleImportConfirmInput,
     ResolvedArtistProfile, PlatformEntry,
+    BatchInfo,
 )
 from app.llm.roster_parse import parse_roster_text
 from app.connectors.identity import detect_platform_from_url, extract_platform_id
@@ -811,14 +812,57 @@ async def import_roster_from_confirm(
         warnings=import_warnings,
     )
 
+@router.get("/labels/{label_id}/batches", response_model=list[BatchInfo])
+async def get_label_batches(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+    """Return available pipeline run batches for a label, newest first."""
+    await _get_user_label(db, label_id, user)
+    result = await db.execute(
+        select(
+            Recommendation.batch_id,
+            func.min(Recommendation.created_at).label("created_at"),
+            func.count().label("candidate_count"),
+        )
+        .where(Recommendation.label_id == label_id)
+        .group_by(Recommendation.batch_id)
+        .order_by(func.min(Recommendation.created_at).desc())
+    )
+    return [
+        BatchInfo(batch_id=row.batch_id, created_at=row.created_at, candidate_count=row.candidate_count)
+        for row in result.all()
+    ]
+
+
 @router.get("/labels/{label_id}/taste-map", response_model=TasteMapResponse)
-async def get_taste_map(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def get_taste_map(label_id: str, batch_id: str | None = None, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
     label = await _get_user_label(db, label_id, user)
 
-    result = await db.execute(
-        select(LabelCluster).where(LabelCluster.label_id == label_id)
-        .order_by(LabelCluster.cluster_index)
-    )
+    # Resolve batch_id: use provided, or find latest from clusters
+    if batch_id:
+        cluster_query = select(LabelCluster).where(
+            LabelCluster.label_id == label_id,
+            LabelCluster.batch_id == batch_id,
+        ).order_by(LabelCluster.cluster_index)
+    else:
+        # Find latest batch_id from clusters
+        latest_cluster = await db.execute(
+            select(LabelCluster.batch_id).where(
+                LabelCluster.label_id == label_id,
+                LabelCluster.batch_id != None,
+            ).order_by(LabelCluster.created_at.desc()).limit(1)
+        )
+        resolved_batch = latest_cluster.scalar_one_or_none()
+        if resolved_batch:
+            cluster_query = select(LabelCluster).where(
+                LabelCluster.label_id == label_id,
+                LabelCluster.batch_id == resolved_batch,
+            ).order_by(LabelCluster.cluster_index)
+        else:
+            # Fallback: old clusters without batch_id
+            cluster_query = select(LabelCluster).where(
+                LabelCluster.label_id == label_id
+            ).order_by(LabelCluster.cluster_index)
+
+    result = await db.execute(cluster_query)
     clusters = result.scalars().all()
     artist_name_map: dict[str, str] = {}
     if clusters:
@@ -872,6 +916,7 @@ async def get_label_roster(label_id: str, user: Profile | None = Depends(get_opt
 async def get_scout_feed(
     label_id: str,
     limit: int = 50,
+    batch_id: str | None = None,
     roster_artist_id: str | None = None,
     min_similarity: float | None = None,
     user: Profile | None = Depends(get_optional_user),
@@ -879,21 +924,31 @@ async def get_scout_feed(
 ):
     label = await _get_user_label(db, label_id, user)
 
+    # Resolve batch_id: use provided, or find latest
+    if batch_id:
+        # Verify the batch belongs to this label
+        verify = await db.execute(
+            select(Recommendation.batch_id).where(
+                Recommendation.label_id == label_id,
+                Recommendation.batch_id == batch_id,
+            ).limit(1)
+        )
+        if not verify.scalar_one_or_none():
+            return ScoutFeedResponse(label_id=label_id, batch_id=batch_id, items=[], total=0)
+    else:
+        result = await db.execute(
+            select(Recommendation).where(Recommendation.label_id == label_id)
+            .order_by(Recommendation.created_at.desc()).limit(1)
+        )
+        latest = result.scalar_one_or_none()
+        if not latest:
+            return ScoutFeedResponse(label_id=label_id, batch_id="", items=[], total=0)
+        batch_id = latest.batch_id
+
     cluster_result = await db.execute(
         select(LabelCluster).where(LabelCluster.label_id == label_id)
     )
     cluster_map = {c.id: c for c in cluster_result.scalars().all()}
-
-    # Get latest batch
-    result = await db.execute(
-        select(Recommendation).where(Recommendation.label_id == label_id)
-        .order_by(Recommendation.created_at.desc()).limit(1)
-    )
-    latest = result.scalar_one_or_none()
-    if not latest:
-        return ScoutFeedResponse(label_id=label_id, batch_id="", items=[], total=0)
-
-    batch_id = latest.batch_id
 
     # clamp limit to protect UX and perf
     limit = max(1, min(limit, 200))

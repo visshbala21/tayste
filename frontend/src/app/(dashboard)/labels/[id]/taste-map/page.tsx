@@ -1,13 +1,26 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
+import { RunPicker } from "@/components/run-picker";
 
-export default async function TasteMapPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TasteMapPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ batch?: string }>;
+}) {
   const { id } = await params;
-  const [tasteMap, label] = await Promise.all([
-    api.getTasteMap(id).catch(() => ({ label_id: id, label_name: "", label_dna: null, clusters: [] })),
+  const resolvedSearch = searchParams ? await searchParams : undefined;
+  const batchParam = resolvedSearch?.batch;
+  const [tasteMap, label, batches] = await Promise.all([
+    api.getTasteMap(id, batchParam).catch(() => ({ label_id: id, label_name: "", label_dna: null, clusters: [] })),
     api.getLabel(id),
+    api.getBatches(id).catch(() => []),
   ]);
+
+  const isPipelineRunning = label.pipeline_status === "running" || label.pipeline_status === "queued";
+  const hasData = tasteMap.clusters.length > 0;
 
   const dna = label.label_dna || {};
   const thesis = (dna as any).label_thesis_bullets || [];
@@ -46,6 +59,28 @@ export default async function TasteMapPage({ params }: { params: Promise<{ id: s
             Collections
           </Link>
         </div>
+
+        {/* Run picker */}
+        {batches.length > 0 && (
+          <RunPicker
+            batches={batches}
+            currentBatchId={batchParam || batches[0]?.batch_id || ""}
+            labelId={id}
+            basePath="taste-map"
+          />
+        )}
+
+        {/* Pipeline banner */}
+        {isPipelineRunning && hasData && (
+          <div className="mt-3 bg-amber-500/5 border border-amber-500/20 rounded-lg px-4 py-2.5 text-sm text-amber-300/80">
+            A new pipeline run is in progress. Showing results from your last completed run.
+          </div>
+        )}
+        {isPipelineRunning && !hasData && (
+          <div className="mt-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5 text-sm text-primary-light">
+            Your pipeline is running — clusters will appear here when it completes.
+          </div>
+        )}
       </div>
 
       {/* Label Thesis */}

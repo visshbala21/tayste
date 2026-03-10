@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
+import { RunPicker } from "@/components/run-picker";
 import { ScoutFeedClient } from "./client";
 
 export default async function ScoutFeedPage({
@@ -8,17 +9,22 @@ export default async function ScoutFeedPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ limit?: string }>;
+  searchParams?: Promise<{ limit?: string; batch?: string }>;
 }) {
   const { id } = await params;
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const limit = Math.max(1, Math.min(parseInt(resolvedSearch?.limit || "50", 10) || 50, 200));
-  const [feed, label, watchlists, rosterArtists] = await Promise.all([
-    api.getScoutFeed(id, limit).catch(() => ({ label_id: id, batch_id: "", items: [], total: 0 })),
+  const batchParam = resolvedSearch?.batch;
+  const [feed, label, watchlists, rosterArtists, batches] = await Promise.all([
+    api.getScoutFeed(id, limit, undefined, undefined, batchParam).catch(() => ({ label_id: id, batch_id: "", items: [], total: 0 })),
     api.getLabel(id),
     api.getWatchlists(id).catch(() => []),
     api.getRoster(id).catch(() => []),
+    api.getBatches(id).catch(() => []),
   ]);
+
+  const isPipelineRunning = label.pipeline_status === "running" || label.pipeline_status === "queued";
+  const hasData = feed.items.length > 0;
 
   // Pre-compute which artists are already in watchlists (server-side, avoids N client-side calls)
   let watchlistedArtistIds: string[] = [];
@@ -75,19 +81,44 @@ export default async function ScoutFeedPage({
         {availableFilters.length > 0 && (
           <div className="mt-3 flex items-center gap-2">
             <span className="text-xs text-white/35">Show:</span>
-            {availableFilters.map((n) => (
-              <Link
-                key={n}
-                href={`/labels/${id}/scout-feed?limit=${n}`}
-                className={`inline-flex items-center rounded-pill px-3 py-1 text-xs transition-all duration-200 ${
-                  limit === n
-                    ? "bg-primary text-[#f5f5f0]"
-                    : "bg-transparent border border-white/[0.12] text-white/40 hover:border-primary hover:text-primary"
-                }`}
-              >
-                Top {n}
-              </Link>
-            ))}
+            {availableFilters.map((n) => {
+              const linkParams = new URLSearchParams({ limit: String(n) });
+              if (batchParam) linkParams.set("batch", batchParam);
+              return (
+                <Link
+                  key={n}
+                  href={`/labels/${id}/scout-feed?${linkParams}`}
+                  className={`inline-flex items-center rounded-pill px-3 py-1 text-xs transition-all duration-200 ${
+                    limit === n
+                      ? "bg-primary text-[#f5f5f0]"
+                      : "bg-transparent border border-white/[0.12] text-white/40 hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  Top {n}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Run picker */}
+        <RunPicker
+          batches={batches}
+          currentBatchId={feed.batch_id}
+          labelId={id}
+          basePath="scout-feed"
+          extraParams={`limit=${limit}`}
+        />
+
+        {/* Pipeline banner */}
+        {isPipelineRunning && hasData && (
+          <div className="mt-3 bg-amber-500/5 border border-amber-500/20 rounded-lg px-4 py-2.5 text-sm text-amber-300/80">
+            A new pipeline run is in progress. Showing results from your last completed run.
+          </div>
+        )}
+        {isPipelineRunning && !hasData && (
+          <div className="mt-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5 text-sm text-primary-light">
+            Your pipeline is running — results will appear here when it completes.
           </div>
         )}
       </div>

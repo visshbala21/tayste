@@ -4,6 +4,7 @@ import logging
 from sqlalchemy import select
 from app.db.session import async_session_factory
 from app.models.tables import Label, RosterMembership
+from app.models.base import new_uuid
 from app.ranking.features import compute_all_candidate_features, compute_artist_features
 from app.ranking.engine import rank_candidates
 from app.ranking.cultural_features import compute_cultural_features
@@ -57,11 +58,12 @@ async def run():
 
         for lid in label_ids:
             try:
-                logger.info(f"Clustering label {lid}")
-                await cluster_label_artists(db, lid)
+                batch_id = new_uuid()
+                logger.info(f"Clustering label {lid} (batch {batch_id})")
+                await cluster_label_artists(db, lid, batch_id=batch_id)
 
                 logger.info(f"Ranking candidates for label {lid}")
-                recs = await rank_candidates(db, lid)
+                recs = await rank_candidates(db, lid, batch_id=batch_id)
                 logger.info(f"Generated {len(recs)} recommendations for label {lid}")
                 try:
                     created = await generate_alerts_for_label(db, lid, recs)

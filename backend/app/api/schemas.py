@@ -381,3 +381,11 @@ class SimpleImportConfirmInput(BaseModel):
     artists: List[ResolvedArtistProfile]
     run_pipeline: bool = False
     discovery_mode: str = "emerging"
+
+
+# --- Batches ---
+
+class BatchInfo(BaseModel):
+    batch_id: str
+    created_at: datetime
+    candidate_count: int

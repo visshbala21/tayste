@@ -156,6 +156,7 @@ class LabelCluster(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    batch_id: Mapped[Optional[str]] = mapped_column(String(36))
     cluster_index: Mapped[int] = mapped_column(Integer, nullable=False)
     centroid = mapped_column(Vector(128))
     cluster_name: Mapped[Optional[str]] = mapped_column(String(255))
@@ -163,6 +164,10 @@ class LabelCluster(Base, TimestampMixin):
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
 
     label: Mapped["Label"] = relationship(back_populates="clusters")
+
+    __table_args__ = (
+        Index("ix_label_cluster_batch", "label_id", "batch_id"),
+    )
 
 
 class ArtistFeature(Base, TimestampMixin):

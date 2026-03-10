@@ -195,6 +195,12 @@ export interface ScoutFeed {
   total: number;
 }
 
+export interface BatchInfo {
+  batch_id: string;
+  created_at: string;
+  candidate_count: number;
+}
+
 export interface ClusterInfo {
   cluster_id: string;
   cluster_index: number;
@@ -420,11 +426,16 @@ export interface AlertItem {
 export const api = {
   getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 0),
   getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 0),
-  getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`, undefined, 60),
-  getScoutFeed: (id: string, limit: number = 50, rosterArtistId?: string, minSimilarity?: number) => {
+  getBatches: (labelId: string) => fetchCachedAPI<BatchInfo[]>(`/labels/${labelId}/batches`, undefined, 0),
+  getTasteMap: (id: string, batchId?: string) => {
+    const params = batchId ? `?batch_id=${batchId}` : "";
+    return fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map${params}`, undefined, 60);
+  },
+  getScoutFeed: (id: string, limit: number = 50, rosterArtistId?: string, minSimilarity?: number, batchId?: string) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (rosterArtistId) params.set("roster_artist_id", rosterArtistId);
     if (minSimilarity != null) params.set("min_similarity", String(minSimilarity));
+    if (batchId) params.set("batch_id", batchId);
     return fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?${params}`, undefined, 15);
   },
   getRoster: (labelId: string) =>
