@@ -392,8 +392,8 @@ export interface AlertItem {
 }
 
 export const api = {
-  getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 30),
-  getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 30),
+  getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 0),
+  getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 0),
   getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`, undefined, 60),
   getScoutFeed: (id: string, limit: number = 50, rosterArtistId?: string, minSimilarity?: number) => {
     const params = new URLSearchParams({ limit: String(limit) });
