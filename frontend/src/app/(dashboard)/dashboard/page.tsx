@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api, Label, BatchInfo } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
+import { LabelRuns } from "@/components/label-runs";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -16,14 +17,14 @@ export default async function DashboardPage() {
     // API not available yet
   }
 
-  // Fetch latest batch info for each label (in parallel)
-  const labelBatches: Record<string, BatchInfo | null> = {};
+  // Fetch all batch info for each label (in parallel)
+  const labelBatches: Record<string, BatchInfo[]> = {};
   if (labels.length > 0) {
     const batchResults = await Promise.all(
       labels.map((l) => api.getBatches(l.id).catch(() => []))
     );
     labels.forEach((l, i) => {
-      labelBatches[l.id] = batchResults[i]?.[0] || null;
+      labelBatches[l.id] = batchResults[i] || [];
     });
   }
 
@@ -131,32 +132,11 @@ export default async function DashboardPage() {
                       <PipelineBadge status={label.pipeline_status} />
                     </div>
                     <p className="text-white/35 text-sm mt-1">{label.description}</p>
-                    {(() => {
-                      const lastBatch = labelBatches[label.id];
-                      const isRunning = label.pipeline_status === "running" || label.pipeline_status === "queued";
-                      if (isRunning && lastBatch) {
-                        const d = new Date(lastBatch.created_at);
-                        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                        return (
-                          <p className="text-xs text-amber-300/60 mt-1">
-                            Running... &middot; Last run: {dateStr} &middot; {lastBatch.candidate_count} candidates
-                          </p>
-                        );
-                      }
-                      if (lastBatch) {
-                        const d = new Date(lastBatch.created_at);
-                        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                        return (
-                          <p className="text-xs text-white/30 mt-1">
-                            Last run: {dateStr} &middot; {lastBatch.candidate_count} candidates
-                          </p>
-                        );
-                      }
-                      if (!isRunning) {
-                        return <p className="text-xs text-white/20 mt-1">No runs yet</p>;
-                      }
-                      return <p className="text-xs text-amber-300/60 mt-1">Running...</p>;
-                    })()}
+                    <LabelRuns
+                      labelId={label.id}
+                      batches={labelBatches[label.id] || []}
+                      isRunning={label.pipeline_status === "running" || label.pipeline_status === "queued"}
+                    />
                     {label.genre_tags && (
                       <div className="flex gap-2 mt-3">
                         {(label.genre_tags as any).primary?.map((g: string) => (
