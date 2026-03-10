@@ -5,7 +5,7 @@ import { PipelinePoller } from "@/components/pipeline-poller";
 export default async function TasteMapPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [tasteMap, label] = await Promise.all([
-    api.getTasteMap(id),
+    api.getTasteMap(id).catch(() => ({ label_id: id, label_name: "", label_dna: null, clusters: [] })),
     api.getLabel(id),
   ]);
 

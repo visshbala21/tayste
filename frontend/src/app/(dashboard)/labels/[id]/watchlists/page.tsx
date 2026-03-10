@@ -6,8 +6,8 @@ export default async function WatchlistsPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const [label, watchlists, alerts] = await Promise.all([
     api.getLabel(id),
-    api.getWatchlists(id),
-    api.getAlerts(id, "new", 50),
+    api.getWatchlists(id).catch(() => []),
+    api.getAlerts(id, "new", 50).catch(() => []),
   ]);
 
   return (

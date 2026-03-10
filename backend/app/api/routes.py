@@ -949,23 +949,36 @@ async def get_scout_feed(
     )
     total = total_result.scalar_one()
 
+    # Batch load all artists, features, and nearest roster artists (avoids N+1)
+    all_artist_ids = list(set(rec_artist_ids + [r.nearest_roster_artist_id for r in recs if r.nearest_roster_artist_id]))
+    artist_map: dict[str, Artist] = {}
+    if all_artist_ids:
+        artist_result = await db.execute(
+            select(Artist).where(Artist.id.in_(all_artist_ids))
+        )
+        artist_map = {a.id: a for a in artist_result.scalars().all()}
+
+    features_map: dict[str, ArtistFeature] = {}
+    if rec_artist_ids:
+        feat_result = await db.execute(
+            select(ArtistFeature).where(ArtistFeature.artist_id.in_(rec_artist_ids))
+            .order_by(ArtistFeature.computed_at.desc())
+        )
+        for f in feat_result.scalars().all():
+            if f.artist_id not in features_map:
+                features_map[f.artist_id] = f
+
     items = []
     for rec in recs:
-        artist = await db.get(Artist, rec.artist_id)
+        artist = artist_map.get(rec.artist_id)
         if not artist:
             continue
 
-        # Get latest features
-        feat_result = await db.execute(
-            select(ArtistFeature).where(ArtistFeature.artist_id == rec.artist_id)
-            .order_by(ArtistFeature.computed_at.desc()).limit(1)
-        )
-        features = feat_result.scalar_one_or_none()
+        features = features_map.get(rec.artist_id)
 
-        # Get nearest roster artist name
         nearest_name = None
         if rec.nearest_roster_artist_id:
-            nearest = await db.get(Artist, rec.nearest_roster_artist_id)
+            nearest = artist_map.get(rec.nearest_roster_artist_id)
             if nearest:
                 nearest_name = nearest.name
         cluster_name = None

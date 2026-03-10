@@ -60,21 +60,37 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return {};
 }
 
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+function withTimeout(options?: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): { init: RequestInit; cleanup: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    init: { ...options, signal: controller.signal },
+    cleanup: () => clearTimeout(timer),
+  };
+}
+
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const res = await fetch(`${getApiBase()}/api${path}`, {
+  const { init, cleanup } = withTimeout({
     ...options,
     headers: { "Content-Type": "application/json", ...authHeaders, ...options?.headers },
     cache: "no-store",
   });
-  if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-    throw new Error("Unauthorized");
+  try {
+    const res = await fetch(`${getApiBase()}/api${path}`, init);
+    if (res.status === 401 && typeof window !== "undefined") {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } finally {
+    cleanup();
   }
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
 }
 
 async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidateSeconds: number = 30): Promise<T> {
@@ -93,33 +109,43 @@ async function fetchCachedAPI<T>(path: string, options?: RequestInit, revalidate
     }
   }
 
-  const res = await fetch(`${getApiBase()}/api${path}`, fetchOptions);
-  if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-    throw new Error("Unauthorized");
+  const { init, cleanup } = withTimeout(fetchOptions);
+  try {
+    const res = await fetch(`${getApiBase()}/api${path}`, init);
+    if (res.status === 401 && typeof window !== "undefined") {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } finally {
+    cleanup();
   }
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
 }
 
 async function fetchMultipart<T>(path: string, form: FormData): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const res = await fetch(`${getApiBase()}/api${path}`, {
+  const { init, cleanup } = withTimeout({
     method: "POST",
     body: form,
     headers: { ...authHeaders },
     cache: "no-store",
-  });
-  if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-    throw new Error("Unauthorized");
+  }, 30_000);
+  try {
+    const res = await fetch(`${getApiBase()}/api${path}`, init);
+    if (res.status === 401 && typeof window !== "undefined") {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      throw new Error("Unauthorized");
+    }
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } finally {
+    cleanup();
   }
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
 }
 
 export interface Label {
