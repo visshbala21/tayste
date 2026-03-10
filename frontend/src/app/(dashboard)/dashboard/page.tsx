@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api, Label, BatchInfo } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
+import { LabelCards } from "@/components/label-cards";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
@@ -115,91 +116,7 @@ export default async function DashboardPage() {
             <p className="text-white/40">No labels yet. Import a roster to get started.</p>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {labels.map((label) => (
-              <div
-                key={label.id}
-                className="bg-surface border border-white/[0.12] rounded-lg p-5 relative overflow-hidden hover:border-primary/40 transition-all duration-300 group"
-              >
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary to-accent2" />
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-display text-[22px] tracking-wide text-[#f5f5f0] group-hover:text-primary-light transition">
-                        {label.name}
-                      </h3>
-                      <PipelineBadge status={label.pipeline_status} />
-                    </div>
-                    <p className="text-white/35 text-sm mt-1">{label.description}</p>
-                    {(() => {
-                      const lastBatch = labelBatches[label.id];
-                      const isRunning = label.pipeline_status === "running" || label.pipeline_status === "queued";
-                      if (isRunning && lastBatch) {
-                        const d = new Date(lastBatch.created_at);
-                        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                        return (
-                          <p className="text-xs text-amber-300/60 mt-1">
-                            Running... &middot; Last run: {dateStr} &middot; {lastBatch.candidate_count} candidates
-                          </p>
-                        );
-                      }
-                      if (lastBatch) {
-                        const d = new Date(lastBatch.created_at);
-                        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                        return (
-                          <p className="text-xs text-white/30 mt-1">
-                            Last run: {dateStr} &middot; {lastBatch.candidate_count} candidates
-                          </p>
-                        );
-                      }
-                      if (!isRunning) {
-                        return <p className="text-xs text-white/20 mt-1">No runs yet</p>;
-                      }
-                      return <p className="text-xs text-amber-300/60 mt-1">Running...</p>;
-                    })()}
-                    {label.genre_tags && (
-                      <div className="flex gap-2 mt-3">
-                        {(label.genre_tags as any).primary?.map((g: string) => (
-                          <span key={g} className="tag">{g}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Waveform decoration */}
-                    <div className="mt-3 wave" style={{ height: 24 }}>
-                      {[12, 20, 8, 24, 16, 22, 10, 18, 26, 14, 20, 12].map((h, i) => (
-                        <div
-                          key={i}
-                          className="wave-bar"
-                          style={{ height: h, opacity: 0.3 + (i % 3) * 0.1 }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 ml-4">
-                    <Link
-                      href={`/labels/${label.id}/scout-feed`}
-                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-primary text-[#f5f5f0] hover:bg-accent2 transition-all duration-200 hover:-translate-y-px"
-                    >
-                      Scout Feed
-                    </Link>
-                    <Link
-                      href={`/labels/${label.id}/taste-map`}
-                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-primary text-primary hover:bg-primary hover:text-[#f5f5f0] transition-all duration-200 hover:-translate-y-px"
-                    >
-                      Taste Map
-                    </Link>
-                    <Link
-                      href={`/labels/${label.id}/watchlists`}
-                      className="inline-flex items-center rounded-pill px-4 py-1.5 text-xs bg-transparent border border-white/[0.12] text-white/40 hover:bg-white/[0.05] hover:text-white/60 transition-all duration-200 hover:-translate-y-px"
-                    >
-                      Collections
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <LabelCards labels={labels} labelBatches={labelBatches} />
         )}
       </div>
 
@@ -247,50 +164,3 @@ export default async function DashboardPage() {
   );
 }
 
-function PipelineBadge({ status }: { status?: string }) {
-  if (status === "queued") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] bg-amber-500/10 text-amber-300/80 px-2.5 py-0.5 rounded-pill border border-amber-500/20">
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/80 animate-pulse" />
-        Queued
-      </span>
-    );
-  }
-  if (status === "running") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] bg-primary/10 text-primary-light px-2.5 py-0.5 rounded-pill border border-primary/20">
-        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-        Running
-      </span>
-    );
-  }
-  if (status === "complete") {
-    return (
-      <span className="text-[11px] bg-emerald-500/10 text-emerald-300/80 px-2.5 py-0.5 rounded-pill border border-emerald-500/20">
-        Ready
-      </span>
-    );
-  }
-  if (status === "error") {
-    return (
-      <span className="text-[11px] bg-red-500/10 text-red-300/80 px-2.5 py-0.5 rounded-pill border border-red-500/20">
-        Error
-      </span>
-    );
-  }
-  if (status === "canceled") {
-    return (
-      <span className="text-[11px] bg-white/[0.04] text-white/30 px-2.5 py-0.5 rounded-pill border border-white/[0.06]">
-        Canceled
-      </span>
-    );
-  }
-  return (
-    <span className="text-[11px] bg-white/[0.04] text-white/30 px-2.5 py-0.5 rounded-pill border border-white/[0.06]">
-      Not run
-    </span>
-  );
-}
