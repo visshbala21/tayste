@@ -25,11 +25,14 @@ export async function middleware(request: NextRequest) {
     },
   );
 
+  // Use getSession() instead of getUser() to avoid a network call to Supabase
+  // on every navigation. getUser() can fail transiently when the tab is
+  // backgrounded and resumed, causing spurious redirects to /login.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  if (!session) {
     const url = request.nextUrl.clone();
     const returnTo = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
