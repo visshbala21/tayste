@@ -13,10 +13,11 @@ export default async function ScoutFeedPage({
   const { id } = await params;
   const resolvedSearch = searchParams ? await searchParams : undefined;
   const limit = Math.max(1, Math.min(parseInt(resolvedSearch?.limit || "50", 10) || 50, 200));
-  const [feed, label, watchlists] = await Promise.all([
+  const [feed, label, watchlists, rosterArtists] = await Promise.all([
     api.getScoutFeed(id, limit),
     api.getLabel(id),
     api.getWatchlists(id),
+    api.getRoster(id),
   ]);
 
   // Pre-compute which artists are already in watchlists (server-side, avoids N client-side calls)
@@ -97,6 +98,7 @@ export default async function ScoutFeedPage({
         pipelineStatus={label.pipeline_status}
         watchlists={watchlists}
         initialWatchlistedIds={watchlistedArtistIds}
+        rosterArtists={rosterArtists}
       />
     </div>
   );

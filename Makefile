@@ -1,4 +1,4 @@
-.PHONY: dev stop jobs-ingest jobs-score jobs-discover jobs-llm jobs-sc-discover jobs-sc-enrich jobs-spotify-graph jobs-cultural-collect jobs-cultural-interpret demo seed clean
+.PHONY: dev stop jobs-ingest jobs-score jobs-discover jobs-llm jobs-sc-discover jobs-sc-enrich jobs-spotify-graph jobs-spotify-genre jobs-cultural-collect jobs-cultural-interpret demo seed clean
 
 # Start all services
 dev:
@@ -36,6 +36,10 @@ jobs-spotify-graph:
 jobs-sc-discover:
 	docker compose run --rm jobs app.jobs.pull_soundcharts_candidates
 
+# Run Spotify genre-based broad discovery
+jobs-spotify-genre:
+	docker compose run --rm jobs app.jobs.pull_spotify_genre_search
+
 # Run Soundcharts enrichment (time-series stats)
 jobs-sc-enrich:
 	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
@@ -61,6 +65,8 @@ demo:
 	docker compose run --rm jobs app.jobs.pull_soundcharts_candidates
 	@echo "Step 4: Related-artist graph discovery..."
 	docker compose run --rm jobs app.jobs.pull_spotify_graph
+	@echo "Step 4b: Genre-based Spotify discovery..."
+	docker compose run --rm jobs app.jobs.pull_spotify_genre_search
 	@echo "Step 5: Soundcharts enrichment..."
 	docker compose run --rm jobs app.jobs.enrich_soundcharts_artists
 	@echo "Step 6: Collecting cultural signals..."

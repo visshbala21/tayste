@@ -8,6 +8,7 @@ from app.db.session import async_session_factory
 from app.models.tables import Label
 from app.jobs import ingest as ingest_job
 from app.jobs import pull_spotify_graph as spotify_graph_job
+from app.jobs import pull_spotify_genre_search as spotify_genre_job
 from app.jobs import pull_soundcharts_candidates as sc_discover_job
 from app.jobs import discover as seed_discover_job
 from app.jobs import enrich_soundcharts_artists as sc_enrich_job
@@ -72,6 +73,7 @@ class PipelineQueue:
         try:
             await sc_discover_job.run()      # Cross-ref roster with Soundcharts first
             await spotify_graph_job.run()    # Walk SC related artists (needs UUIDs from above)
+            await spotify_genre_job.run()    # Broad genre-based Spotify search
             await seed_discover_job.run()    # Query-seed backstop when graph coverage is sparse
             await sc_enrich_job.run()
             await ingest_job.run()

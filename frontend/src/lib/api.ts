@@ -153,6 +153,13 @@ export interface ScoutFeedItem {
   cultural_energy?: number;
   breakout_candidate?: boolean;
   cultural_highlights?: string[];
+  roster_similarities?: Record<string, number>;
+}
+
+export interface RosterArtistInfo {
+  id: string;
+  name: string;
+  image_url?: string;
 }
 
 export interface ScoutFeed {
@@ -388,8 +395,14 @@ export const api = {
   getLabels: () => fetchCachedAPI<Label[]>("/labels", undefined, 30),
   getLabel: (id: string) => fetchCachedAPI<Label>(`/labels/${id}`, undefined, 30),
   getTasteMap: (id: string) => fetchCachedAPI<TasteMap>(`/labels/${id}/taste-map`, undefined, 60),
-  getScoutFeed: (id: string, limit: number = 50) =>
-    fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?limit=${limit}`, undefined, 15),
+  getScoutFeed: (id: string, limit: number = 50, rosterArtistId?: string, minSimilarity?: number) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (rosterArtistId) params.set("roster_artist_id", rosterArtistId);
+    if (minSimilarity != null) params.set("min_similarity", String(minSimilarity));
+    return fetchCachedAPI<ScoutFeed>(`/labels/${id}/scout-feed?${params}`, undefined, 15);
+  },
+  getRoster: (labelId: string) =>
+    fetchCachedAPI<RosterArtistInfo[]>(`/labels/${labelId}/roster`, undefined, 60),
   getArtist: (id: string, labelId?: string) =>
     fetchCachedAPI<ArtistDetail>(`/artists/${id}${labelId ? `?label_id=${labelId}` : ""}`, undefined, 15),
   submitFeedback: (labelId: string, data: { artist_id: string; action: string; notes?: string }) =>

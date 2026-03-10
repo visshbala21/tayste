@@ -204,6 +204,7 @@ class Recommendation(Base, TimestampMixin):
     nearest_cluster_id: Mapped[Optional[str]] = mapped_column(String(36))
     nearest_roster_artist_id: Mapped[Optional[str]] = mapped_column(String(36))
     score_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    roster_similarities: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
 
     label: Mapped["Label"] = relationship(back_populates="recommendations")
     artist: Mapped["Artist"] = relationship(back_populates="recommendations")

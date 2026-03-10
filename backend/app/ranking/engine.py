@@ -353,8 +353,10 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
 
         nearest_roster_id = None
         best_roster_sim = -1.0
+        roster_similarities: dict[str, float] = {}
         for rid, rvec in roster_embeddings.items():
             sim = cosine_similarity(artist_vec, rvec)
+            roster_similarities[rid] = round(_normalized_cosine(sim), 4)
             if sim > best_roster_sim:
                 best_roster_sim = sim
                 nearest_roster_id = rid
@@ -474,6 +476,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             "final_score": round(final_score, 4),
             "nearest_cluster_id": nearest_cluster_id,
             "nearest_roster_artist_id": nearest_roster_id,
+            "roster_similarities": roster_similarities,
             "score_breakdown": {
                 "fit": round(fit_score, 4),
                 "momentum": round(momentum, 4),
@@ -556,6 +559,7 @@ async def rank_candidates(db: AsyncSession, label_id: str) -> list[Recommendatio
             nearest_cluster_id=payload["nearest_cluster_id"],
             nearest_roster_artist_id=payload["nearest_roster_artist_id"],
             score_breakdown=payload["score_breakdown"],
+            roster_similarities=payload.get("roster_similarities") or {},
         )
         db.add(rec)
         recommendations.append(rec)

@@ -1,7 +1,7 @@
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, cast, Float
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.tables import (
@@ -852,8 +852,31 @@ async def get_taste_map(label_id: str, user: Profile | None = Depends(get_option
     )
 
 
+@router.get("/labels/{label_id}/roster")
+async def get_label_roster(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+    """Return active roster artists for a label (used by roster-filter dropdown)."""
+    label = await _get_user_label(db, label_id, user)
+    result = await db.execute(
+        select(Artist.id, Artist.name, Artist.image_url)
+        .join(RosterMembership, RosterMembership.artist_id == Artist.id)
+        .where(
+            RosterMembership.label_id == label_id,
+            RosterMembership.is_active == True,
+        )
+        .order_by(Artist.name)
+    )
+    return [{"id": r[0], "name": r[1], "image_url": r[2]} for r in result.all()]
+
+
 @router.get("/labels/{label_id}/scout-feed", response_model=ScoutFeedResponse)
-async def get_scout_feed(label_id: str, limit: int = 50, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+async def get_scout_feed(
+    label_id: str,
+    limit: int = 50,
+    roster_artist_id: str | None = None,
+    min_similarity: float | None = None,
+    user: Profile | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
     label = await _get_user_label(db, label_id, user)
 
     cluster_result = await db.execute(
@@ -874,12 +897,25 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: Profile | None = 
 
     # clamp limit to protect UX and perf
     limit = max(1, min(limit, 200))
-    result = await db.execute(
-        select(Recommendation).where(
-            Recommendation.label_id == label_id,
-            Recommendation.batch_id == batch_id,
-        ).order_by(Recommendation.final_score.desc()).limit(limit)
+
+    query = select(Recommendation).where(
+        Recommendation.label_id == label_id,
+        Recommendation.batch_id == batch_id,
     )
+
+    if roster_artist_id:
+        # Filter by similarity to specific roster artist using JSONB ->> cast
+        sim_expr = cast(
+            Recommendation.roster_similarities[roster_artist_id].astext, Float
+        )
+        query = query.where(Recommendation.roster_similarities[roster_artist_id] != None)
+        if min_similarity is not None:
+            query = query.where(sim_expr >= min_similarity)
+        query = query.order_by(sim_expr.desc()).limit(limit)
+    else:
+        query = query.order_by(Recommendation.final_score.desc()).limit(limit)
+
+    result = await db.execute(query)
     recs = result.scalars().all()
     rec_artist_ids = [r.artist_id for r in recs]
 
@@ -987,6 +1023,7 @@ async def get_scout_feed(label_id: str, limit: int = 50, user: Profile | None = 
             cultural_energy=cultural_energy,
             breakout_candidate=breakout_candidate,
             cultural_highlights=cultural_highlights,
+            roster_similarities=rec.roster_similarities or None,
         ))
 
     return ScoutFeedResponse(

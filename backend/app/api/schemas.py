@@ -214,6 +214,7 @@ class ScoutFeedItem(BaseModel):
     cultural_energy: Optional[float] = None
     breakout_candidate: Optional[bool] = None
     cultural_highlights: Optional[List[str]] = None
+    roster_similarities: Optional[dict] = None
 
 
 class ScoutFeedResponse(BaseModel):

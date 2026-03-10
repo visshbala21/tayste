@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { api, type ScoutFeedItem, type Watchlist } from "@/lib/api";
+import { api, type ScoutFeedItem, type Watchlist, type RosterArtistInfo } from "@/lib/api";
 import { formatPercent, scoreColor } from "@/lib/utils";
 import { WatchlistPickerButton } from "@/components/watchlist-picker-button";
 
@@ -25,17 +25,35 @@ export function ScoutFeedClient({
   pipelineStatus,
   watchlists,
   initialWatchlistedIds = [],
+  rosterArtists = [],
 }: {
   items: ScoutFeedItem[];
   labelId: string;
   pipelineStatus?: string;
   watchlists: Watchlist[];
   initialWatchlistedIds?: string[];
+  rosterArtists?: RosterArtistInfo[];
 }) {
   const router = useRouter();
   const [feedbackSent, setFeedbackSent] = useState<Set<string>>(new Set());
   const [watchlistAdded, setWatchlistAdded] = useState<Set<string>>(new Set(initialWatchlistedIds));
   const [expandedScores, setExpandedScores] = useState<Set<string>>(new Set());
+  const [selectedRosterArtist, setSelectedRosterArtist] = useState<string>("");
+  const [minSimilarity, setMinSimilarity] = useState<number>(0);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedRosterArtist) return items;
+    return items
+      .filter((item) => {
+        const sim = item.roster_similarities?.[selectedRosterArtist];
+        return sim != null && sim >= minSimilarity;
+      })
+      .sort((a, b) => {
+        const simA = a.roster_similarities?.[selectedRosterArtist] ?? 0;
+        const simB = b.roster_similarities?.[selectedRosterArtist] ?? 0;
+        return simB - simA;
+      });
+  }, [items, selectedRosterArtist, minSimilarity]);
 
   const sendFeedback = async (artistId: string, action: string) => {
     try {
@@ -73,7 +91,46 @@ export function ScoutFeedClient({
 
   return (
     <div className="space-y-3">
-      {items.map((item) => {
+      {/* Roster similarity filter */}
+      {rosterArtists.length > 0 && (
+        <div className="bg-surface border border-white/[0.12] rounded-lg p-4 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-white/40">Similar to:</label>
+            <select
+              value={selectedRosterArtist}
+              onChange={(e) => {
+                setSelectedRosterArtist(e.target.value);
+                setMinSimilarity(0);
+              }}
+              className="bg-white/[0.06] border border-white/[0.12] rounded-pill px-3 py-1.5 text-xs text-white/80 outline-none focus:border-primary transition-colors"
+            >
+              <option value="">All (by score)</option>
+              {rosterArtists.map((ra) => (
+                <option key={ra.id} value={ra.id}>{ra.name}</option>
+              ))}
+            </select>
+          </div>
+          {selectedRosterArtist && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/40">Min similarity:</label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(minSimilarity * 100)}
+                onChange={(e) => setMinSimilarity(parseInt(e.target.value, 10) / 100)}
+                className="w-28 accent-[var(--primary)]"
+              />
+              <span className="text-xs font-mono text-white/60 w-8">{Math.round(minSimilarity * 100)}%</span>
+            </div>
+          )}
+          {selectedRosterArtist && (
+            <span className="text-xs text-white/35">{filteredItems.length} result{filteredItems.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+      )}
+
+      {filteredItems.map((item) => {
         const showScores = expandedScores.has(item.artist_id);
 
         return (
@@ -165,8 +222,13 @@ export function ScoutFeedClient({
                       30d: {item.growth_30d > 0 ? "+" : ""}{formatPercent(item.growth_30d)}
                     </span>
                   )}
-                  {item.nearest_roster_artist && (
+                  {item.nearest_roster_artist && !selectedRosterArtist && (
                     <span>Similar to: <span className="text-white/60">{item.nearest_roster_artist}</span></span>
+                  )}
+                  {selectedRosterArtist && item.roster_similarities?.[selectedRosterArtist] != null && (
+                    <span className="text-primary-light font-mono">
+                      {Math.round((item.roster_similarities[selectedRosterArtist]) * 100)}% match
+                    </span>
                   )}
                 </div>
 
