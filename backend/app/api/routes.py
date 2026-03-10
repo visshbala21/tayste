@@ -1,7 +1,7 @@
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy import select, func, and_, cast, Float
+from sqlalchemy import select, func, and_, cast, Float, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.tables import (
@@ -830,6 +830,25 @@ async def get_label_batches(label_id: str, user: Profile | None = Depends(get_op
         BatchInfo(batch_id=row.batch_id, created_at=row.created_at, candidate_count=row.candidate_count)
         for row in result.all()
     ]
+
+
+@router.delete("/labels/{label_id}/batches/{batch_id}")
+async def delete_batch(label_id: str, batch_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+    await _get_user_label(db, label_id, user)
+    await db.execute(
+        delete(Recommendation).where(
+            Recommendation.label_id == label_id,
+            Recommendation.batch_id == batch_id,
+        )
+    )
+    await db.execute(
+        delete(LabelCluster).where(
+            LabelCluster.label_id == label_id,
+            LabelCluster.batch_id == batch_id,
+        )
+    )
+    await db.commit()
+    return {"deleted": True}
 
 
 @router.get("/labels/{label_id}/taste-map", response_model=TasteMapResponse)

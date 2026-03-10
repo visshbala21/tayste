@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
-import { RunPicker } from "@/components/run-picker";
+import { RunSelector } from "@/components/run-selector";
 
 export default async function TasteMapPage({
   params,
@@ -60,15 +60,13 @@ export default async function TasteMapPage({
           </Link>
         </div>
 
-        {/* Run picker */}
-        {batches.length > 0 && (
-          <RunPicker
-            batches={batches}
-            currentBatchId={batchParam || batches[0]?.batch_id || ""}
-            labelId={id}
-            basePath="taste-map"
-          />
-        )}
+        {/* Run selector */}
+        <RunSelector
+          batches={batches}
+          currentBatchId={batchParam || batches[0]?.batch_id || ""}
+          labelId={id}
+          basePath="taste-map"
+        />
 
         {/* Pipeline banner */}
         {isPipelineRunning && hasData && (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { PipelinePoller } from "@/components/pipeline-poller";
-import { RunPicker } from "@/components/run-picker";
+import { RunSelector } from "@/components/run-selector";
 import { ScoutFeedClient } from "./client";
 
 export default async function ScoutFeedPage({
@@ -101,8 +101,8 @@ export default async function ScoutFeedPage({
           </div>
         )}
 
-        {/* Run picker */}
-        <RunPicker
+        {/* Run selector */}
+        <RunSelector
           batches={batches}
           currentBatchId={feed.batch_id}
           labelId={id}
