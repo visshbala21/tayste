@@ -506,6 +506,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status }),
     }),
-  deleteBatch: (labelId: string, batchId: string) =>
-    fetchAPI<{ deleted: boolean }>(`/labels/${labelId}/batches/${batchId}`, { method: "DELETE" }),
+  deleteLabel: (labelId: string) =>
+    fetchAPI<{ deleted: boolean }>(`/labels/${labelId}`, { method: "DELETE" }),
 };

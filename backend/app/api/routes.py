@@ -832,21 +832,27 @@ async def get_label_batches(label_id: str, user: Profile | None = Depends(get_op
     ]
 
 
-@router.delete("/labels/{label_id}/batches/{batch_id}")
-async def delete_batch(label_id: str, batch_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
-    await _get_user_label(db, label_id, user)
-    await db.execute(
-        delete(Recommendation).where(
-            Recommendation.label_id == label_id,
-            Recommendation.batch_id == batch_id,
-        )
+@router.delete("/labels/{label_id}")
+async def delete_label(label_id: str, user: Profile | None = Depends(get_optional_user), db: AsyncSession = Depends(get_db)):
+    label = await _get_user_label(db, label_id, user)
+    # Delete children that reference watchlists first
+    watchlist_ids_result = await db.execute(
+        select(Watchlist.id).where(Watchlist.label_id == label_id)
     )
-    await db.execute(
-        delete(LabelCluster).where(
-            LabelCluster.label_id == label_id,
-            LabelCluster.batch_id == batch_id,
-        )
-    )
+    watchlist_ids = [r[0] for r in watchlist_ids_result.all()]
+    if watchlist_ids:
+        await db.execute(delete(WatchlistItem).where(WatchlistItem.watchlist_id.in_(watchlist_ids)))
+        await db.execute(delete(Alert).where(Alert.watchlist_id.in_(watchlist_ids)))
+    # Delete all label-owned rows
+    await db.execute(delete(Alert).where(Alert.label_id == label_id))
+    await db.execute(delete(AlertRule).where(AlertRule.label_id == label_id))
+    await db.execute(delete(Watchlist).where(Watchlist.label_id == label_id))
+    await db.execute(delete(Feedback).where(Feedback.label_id == label_id))
+    await db.execute(delete(LabelArtistState).where(LabelArtistState.label_id == label_id))
+    await db.execute(delete(Recommendation).where(Recommendation.label_id == label_id))
+    await db.execute(delete(LabelCluster).where(LabelCluster.label_id == label_id))
+    await db.execute(delete(RosterMembership).where(RosterMembership.label_id == label_id))
+    await db.delete(label)
     await db.commit()
     return {"deleted": True}
 

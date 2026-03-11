@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type BatchInfo } from "@/lib/api";
+import type { BatchInfo } from "@/lib/api";
 
 interface RunSelectorProps {
   batches: BatchInfo[];
@@ -21,9 +21,7 @@ function formatTimestamp(iso: string) {
 
 export function RunSelector({ batches, currentBatchId, labelId, basePath, extraParams }: RunSelectorProps) {
   const [open, setOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
   // Click-outside to close
@@ -46,13 +44,6 @@ export function RunSelector({ batches, currentBatchId, labelId, basePath, extraP
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
 
-  // Cleanup delete timer
-  useEffect(() => {
-    return () => {
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-    };
-  }, []);
-
   if (batches.length === 0) return null;
 
   const activeBatch = batches.find((b) => b.batch_id === currentBatchId) || batches[0];
@@ -67,33 +58,6 @@ export function RunSelector({ batches, currentBatchId, labelId, basePath, extraP
     }
     const qs = params.toString();
     router.push(`/labels/${labelId}/${basePath}${qs ? `?${qs}` : ""}`);
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, batchId: string) => {
-    e.stopPropagation();
-    if (deletingId === batchId) {
-      // Second click — confirm delete
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-      setDeletingId(null);
-      api.deleteBatch(labelId, batchId).then(() => {
-        // If we deleted the active batch, navigate without batch param
-        if (batchId === currentBatchId) {
-          const params = new URLSearchParams();
-          if (extraParams) {
-            const extra = new URLSearchParams(extraParams);
-            extra.forEach((v, k) => { if (k !== "batch") params.set(k, v); });
-          }
-          const qs = params.toString();
-          router.push(`/labels/${labelId}/${basePath}${qs ? `?${qs}` : ""}`);
-        }
-        router.refresh();
-      });
-    } else {
-      // First click — arm delete
-      setDeletingId(batchId);
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = setTimeout(() => setDeletingId(null), 3000);
-    }
   };
 
   return (
@@ -112,7 +76,6 @@ export function RunSelector({ batches, currentBatchId, labelId, basePath, extraP
           {batches.map((batch, idx) => {
             const isActive = batch.batch_id === currentBatchId;
             const isLatest = idx === 0;
-            const isDeleting = deletingId === batch.batch_id;
             return (
               <button
                 key={batch.batch_id}
@@ -131,18 +94,6 @@ export function RunSelector({ batches, currentBatchId, labelId, basePath, extraP
                 {isLatest && (
                   <span className="text-[9px] uppercase tracking-wider text-primary/70 flex-shrink-0">Latest</span>
                 )}
-                <span
-                  onClick={(e) => handleDeleteClick(e, batch.batch_id)}
-                  className={`flex-shrink-0 ml-1 px-1 py-0.5 rounded transition-colors ${
-                    isDeleting
-                      ? "text-red-400 text-[10px] font-medium"
-                      : "text-white/20 hover:text-red-400"
-                  }`}
-                >
-                  {isDeleting ? "Delete?" : (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  )}
-                </span>
               </button>
             );
           })}
