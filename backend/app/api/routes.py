@@ -209,7 +209,6 @@ async def _upsert_roster_entries(
         if platform_id:
             result = await db.execute(
                 select(PlatformAccount).where(
-                    PlatformAccount.artist_id == artist.id,
                     PlatformAccount.platform == platform,
                     PlatformAccount.platform_id == platform_id,
                 )
@@ -236,7 +235,6 @@ async def _upsert_roster_entries(
             if extra_pid:
                 result = await db.execute(
                     select(PlatformAccount).where(
-                        PlatformAccount.artist_id == artist.id,
                         PlatformAccount.platform == extra.platform,
                         PlatformAccount.platform_id == extra_pid,
                     )
