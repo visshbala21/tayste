@@ -111,6 +111,18 @@ class RosterMembership(Base, TimestampMixin):
     )
 
 
+class LabelCandidate(Base, TimestampMixin):
+    __tablename__ = "label_candidates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    label_id: Mapped[str] = mapped_column(ForeignKey("labels.id"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(ForeignKey("artists.id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("label_id", "artist_id", name="uq_label_candidate"),
+    )
+
+
 class Snapshot(Base):
     """Append-only time-series metrics snapshot."""
     __tablename__ = "snapshots"

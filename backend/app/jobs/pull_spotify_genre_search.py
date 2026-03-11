@@ -8,7 +8,7 @@ import asyncio
 import logging
 from sqlalchemy import select
 from app.db.session import async_session_factory
-from app.models.tables import Label, Artist, PlatformAccount, RosterMembership
+from app.models.tables import Label, Artist, PlatformAccount, RosterMembership, LabelCandidate
 from app.models.base import new_uuid
 from app.connectors.spotify import SpotifyConnector
 from app.jobs.discover import is_likely_slop
@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 MAX_CANDIDATES_PER_LABEL = 60
 MAX_FOLLOWERS = 150_000
 MAX_POPULARITY = 45
+
+
+async def _ensure_label_candidate(db, label_id: str, artist_id: str):
+    existing = await db.execute(
+        select(LabelCandidate).where(
+            LabelCandidate.label_id == label_id,
+            LabelCandidate.artist_id == artist_id,
+        )
+    )
+    if not existing.scalar_one_or_none():
+        db.add(LabelCandidate(id=new_uuid(), label_id=label_id, artist_id=artist_id))
+        await db.flush()
 
 
 async def _genre_search_for_label(db, spotify: SpotifyConnector, label_id: str):
@@ -90,14 +102,18 @@ async def _genre_search_for_label(db, spotify: SpotifyConnector, label_id: str):
                     PlatformAccount.platform_id == sp_id,
                 )
             )
-            if existing.scalar_one_or_none():
+            existing_account = existing.scalar_one_or_none()
+            if existing_account:
+                await _ensure_label_candidate(db, label_id, existing_account.artist_id)
                 continue
 
             # Dedup: skip if artist name already exists
             existing_name = await db.execute(
                 select(Artist).where(Artist.name == name)
             )
-            if existing_name.scalar_one_or_none():
+            existing_artist = existing_name.scalar_one_or_none()
+            if existing_artist:
+                await _ensure_label_candidate(db, label_id, existing_artist.id)
                 continue
 
             artist = Artist(
@@ -110,6 +126,8 @@ async def _genre_search_for_label(db, spotify: SpotifyConnector, label_id: str):
             )
             db.add(artist)
             await db.flush()
+
+            await _ensure_label_candidate(db, label_id, artist.id)
 
             db.add(PlatformAccount(
                 id=new_uuid(),

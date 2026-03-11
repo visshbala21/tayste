@@ -5,7 +5,7 @@ from sqlalchemy import select, func, and_, cast, Float, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.tables import (
-    Label, Artist, PlatformAccount, RosterMembership,
+    Label, Artist, PlatformAccount, RosterMembership, LabelCandidate,
     Snapshot, LabelCluster, ArtistFeature, Recommendation,
     Feedback, ArtistLLMBrief, Watchlist, WatchlistItem, Alert, LabelArtistState,
     AlertRule, Profile, ArtistCulturalProfile,
@@ -849,6 +849,7 @@ async def delete_label(label_id: str, user: Profile | None = Depends(get_optiona
     await db.execute(delete(LabelArtistState).where(LabelArtistState.label_id == label_id))
     await db.execute(delete(Recommendation).where(Recommendation.label_id == label_id))
     await db.execute(delete(LabelCluster).where(LabelCluster.label_id == label_id))
+    await db.execute(delete(LabelCandidate).where(LabelCandidate.label_id == label_id))
     await db.execute(delete(RosterMembership).where(RosterMembership.label_id == label_id))
     await db.delete(label)
     await db.commit()

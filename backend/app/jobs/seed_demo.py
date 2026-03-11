@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from app.db.session import async_session_factory
 from app.models.tables import (
     Label, Artist, PlatformAccount, RosterMembership, Snapshot, Embedding,
+    LabelCandidate,
 )
 from app.models.base import new_uuid
 from app.services.embeddings import build_metric_vector, store_embedding
@@ -167,6 +168,10 @@ async def run():
                 platform_url=f"https://app.soundcharts.com/app/artist/{sc_uuid}",
             )
             db.add(sc_account)
+
+            db.add(LabelCandidate(
+                id=new_uuid(), label_id=label.id, artist_id=artist.id,
+            ))
 
             # Generate snapshots with specified growth
             snaps = generate_snapshots(artist.id, ca["followers"], ca["views"], ca["growth"])

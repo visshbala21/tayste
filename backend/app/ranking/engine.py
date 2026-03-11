@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tables import (
     LabelCluster, Embedding, ArtistFeature, Recommendation,
     Artist, RosterMembership, PlatformAccount, LabelArtistState,
-    ArtistCulturalProfile,
+    ArtistCulturalProfile, LabelCandidate,
 )
 from app.models.base import new_uuid
 from app.services.embeddings import cosine_similarity
@@ -224,10 +224,20 @@ async def rank_candidates(db: AsyncSession, label_id: str, batch_id: str | None 
             if emb.artist_id not in roster_embeddings or emb.provider == "metric":
                 roster_embeddings[emb.artist_id] = np.array(emb.vector)
 
-    # Get candidate artists
-    result = await db.execute(
-        select(Artist).where(Artist.is_candidate == True)
+    # Get candidate artists linked to this label; fall back to all candidates
+    # if no label_candidates rows exist yet (backward compat).
+    lc_result = await db.execute(
+        select(LabelCandidate.artist_id).where(LabelCandidate.label_id == label_id)
     )
+    label_candidate_ids = {r[0] for r in lc_result.all()}
+    if label_candidate_ids:
+        result = await db.execute(
+            select(Artist).where(Artist.id.in_(label_candidate_ids))
+        )
+    else:
+        result = await db.execute(
+            select(Artist).where(Artist.is_candidate == True)
+        )
     candidates = result.scalars().all()
     candidate_ids = [artist.id for artist in candidates]
     if not candidate_ids:

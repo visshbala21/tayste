@@ -3,7 +3,7 @@ import asyncio
 import logging
 from sqlalchemy import select
 from app.db.session import async_session_factory
-from app.models.tables import Label, Artist, PlatformAccount, RosterMembership
+from app.models.tables import Label, Artist, PlatformAccount, RosterMembership, LabelCandidate
 from app.models.base import new_uuid
 import re
 from app.connectors.spotify import SpotifyConnector
@@ -13,6 +13,18 @@ from app.api.schemas import LabelDNAOutput
 from app.services.emerging import EmergingSignals, evaluate_emerging_artist, evaluate_open_mode
 
 logger = logging.getLogger(__name__)
+
+
+async def _ensure_label_candidate_legacy(db, label_id: str, artist_id: str):
+    existing = await db.execute(
+        select(LabelCandidate).where(
+            LabelCandidate.label_id == label_id,
+            LabelCandidate.artist_id == artist_id,
+        )
+    )
+    if not existing.scalar_one_or_none():
+        db.add(LabelCandidate(id=new_uuid(), label_id=label_id, artist_id=artist_id))
+        await db.flush()
 
 BAD_NAME_PATTERNS = [
     r"\b(music for|music to|music with)\b",
@@ -145,7 +157,9 @@ async def discover_for_label(db, label_id: str):
                 existing_by_name = await db.execute(
                     select(Artist).where(Artist.name == ch["name"])
                 )
-                if existing_by_name.scalar_one_or_none():
+                existing_artist = existing_by_name.scalar_one_or_none()
+                if existing_artist:
+                    await _ensure_label_candidate_legacy(db, label_id, existing_artist.id)
                     continue
                 # Check if already exists
                 result = await db.execute(
@@ -154,7 +168,9 @@ async def discover_for_label(db, label_id: str):
                         PlatformAccount.platform_id == ch["platform_id"],
                     )
                 )
-                if result.scalar_one_or_none():
+                existing_account = result.scalar_one_or_none()
+                if existing_account:
+                    await _ensure_label_candidate_legacy(db, label_id, existing_account.artist_id)
                     continue
 
                 artist = Artist(
@@ -167,6 +183,7 @@ async def discover_for_label(db, label_id: str):
                 )
                 db.add(artist)
                 await db.flush()
+                await _ensure_label_candidate_legacy(db, label_id, artist.id)
 
                 account = PlatformAccount(
                     id=new_uuid(),
