@@ -35,18 +35,18 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
     if roster_size <= 15:
         return RankingPolicy(
             name="focused_emerging",
-            fit_weight=0.45,
-            momentum_weight=0.45,
-            scale_weight=0.10,
-            risk_weight=0.35,
-            cultural_weight=0.30,
-            min_growth_7d=0.01,
-            min_growth_30d=0.04,
-            min_momentum=0.18,
-            max_risk=0.70,
-            allow_without_features=False,
-            allow_low_momentum=False,
-            min_results=20,
+            fit_weight=0.50,
+            momentum_weight=0.35,
+            scale_weight=0.15,
+            risk_weight=0.25,
+            cultural_weight=0.25,
+            min_growth_7d=0.0,
+            min_growth_30d=0.0,
+            min_momentum=0.0,
+            max_risk=0.85,
+            allow_without_features=True,
+            allow_low_momentum=True,
+            min_results=50,
         )
     if roster_size <= 50:
         return RankingPolicy(
@@ -54,30 +54,30 @@ def _policy_for_roster_size(roster_size: int) -> RankingPolicy:
             fit_weight=0.55,
             momentum_weight=0.30,
             scale_weight=0.15,
-            risk_weight=0.30,
+            risk_weight=0.25,
             cultural_weight=0.20,
-            min_growth_7d=0.005,
-            min_growth_30d=0.02,
-            min_momentum=0.10,
-            max_risk=0.75,
-            allow_without_features=False,
+            min_growth_7d=0.0,
+            min_growth_30d=0.0,
+            min_momentum=0.0,
+            max_risk=0.85,
+            allow_without_features=True,
             allow_low_momentum=True,
-            min_results=35,
+            min_results=75,
         )
     return RankingPolicy(
         name="strategic_scale",
-        fit_weight=0.65,
-        momentum_weight=0.15,
+        fit_weight=0.60,
+        momentum_weight=0.20,
         scale_weight=0.20,
-        risk_weight=0.25,
+        risk_weight=0.20,
         cultural_weight=0.10,
         min_growth_7d=0.0,
         min_growth_30d=0.0,
         min_momentum=0.0,
-        max_risk=0.80,
-        allow_without_features=False,
+        max_risk=0.90,
+        allow_without_features=True,
         allow_low_momentum=True,
-        min_results=60,
+        min_results=100,
     )
 
 
@@ -88,6 +88,10 @@ def _passes_quality_gate(features: ArtistFeature | None, policy: RankingPolicy) 
     risk = features.risk_score or 0.0
     if risk > policy.max_risk:
         return False
+
+    # With permissive policies, pass all non-risky candidates through
+    if policy.allow_without_features and policy.allow_low_momentum:
+        return True
 
     growth_7d = features.growth_7d or 0.0
     growth_30d = features.growth_30d or 0.0
@@ -377,7 +381,7 @@ async def rank_candidates(db: AsyncSession, label_id: str, batch_id: str | None 
             _normalized_cosine(best_roster_sim),
         )
         # Hard floor: avoid low/zero-theme matches in feed.
-        if fit_score < 0.12:
+        if fit_score < 0.05:
             continue
 
         features = latest_features.get(artist.id)

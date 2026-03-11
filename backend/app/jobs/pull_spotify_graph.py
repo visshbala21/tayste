@@ -15,7 +15,7 @@ from app.jobs.discover import is_likely_slop
 from app.services.emerging import EmergingSignals, evaluate_emerging_artist, evaluate_open_mode
 
 logger = logging.getLogger(__name__)
-ALLOWED_CAREER_STAGES = {"emerging", "developing"}
+ALLOWED_CAREER_STAGES = {"emerging", "developing", "mid-level", "established"}
 PROFILE_LOOKUP_CONCURRENCY = 10
 
 
@@ -56,7 +56,7 @@ async def _discover_via_soundcharts(
         return 0
 
     open_mode = discovery_mode == "open"
-    max_candidates = 150 if open_mode else 50
+    max_candidates = 150 if open_mode else 150
     discovered = 0
     seen_uuids: set[str] = set()
     spotify_stats_cache: dict[str, dict] = {}
@@ -64,7 +64,7 @@ async def _discover_via_soundcharts(
     # --- Gather all related-artist calls in parallel ---
     async def _fetch_related(sc_uuid: str):
         try:
-            return await sc.get_related_artists(sc_uuid, limit=20)
+            return await sc.get_related_artists(sc_uuid, limit=50)
         except Exception as e:
             logger.warning(f"SC related artists failed for {sc_uuid}: {e}")
             return None

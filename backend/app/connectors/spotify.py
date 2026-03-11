@@ -63,12 +63,12 @@ class SpotifyConnector:
                 raise
             return resp.json()
 
-    async def search_artists(self, query: str, limit: int = 5) -> list[dict]:
+    async def search_artists(self, query: str, limit: int = 5, offset: int = 0) -> list[dict]:
         if not self.available:
             return []
         data = await self._request(
             "/search",
-            params={"q": query, "type": "artist", "limit": limit, "market": self.market},
+            params={"q": query, "type": "artist", "limit": limit, "market": self.market, "offset": offset},
         )
         if not data:
             return []

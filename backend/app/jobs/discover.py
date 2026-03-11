@@ -110,7 +110,7 @@ async def discover_for_label(db, label_id: str):
     discovered = 0
     spotify_budget = 25
     spotify_used = 0
-    max_candidates = 60
+    max_candidates = 200
 
     for query in queries:
         if discovered >= max_candidates:
@@ -133,7 +133,7 @@ async def discover_for_label(db, label_id: str):
                 followers = ch.get("followers") or 0
                 # Require meaningful Spotify presence — real artists have
                 # followers and popularity; genre pages and compilations don't
-                if not open_mode and (followers < 500 or popularity < 5):
+                if not open_mode and (followers < 100 or popularity < 1):
                     continue
                 if open_mode:
                     emerging = evaluate_open_mode(EmergingSignals(name=ch.get("name")))

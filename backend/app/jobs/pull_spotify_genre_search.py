@@ -16,9 +16,9 @@ from app.services.emerging import EmergingSignals, evaluate_emerging_artist
 
 logger = logging.getLogger(__name__)
 
-MAX_CANDIDATES_PER_LABEL = 60
-MAX_FOLLOWERS = 150_000
-MAX_POPULARITY = 45
+MAX_CANDIDATES_PER_LABEL = 200
+MAX_FOLLOWERS = 500_000
+MAX_POPULARITY = 65
 
 
 async def _ensure_label_candidate(db, label_id: str, artist_id: str):
@@ -55,13 +55,18 @@ async def _genre_search_for_label(db, spotify: SpotifyConnector, label_id: str):
             break
 
         query = f'genre:"{genre}"'
-        try:
-            results = await spotify.search_artists(query, limit=50)
-        except Exception as e:
-            logger.warning(f"Spotify genre search failed for '{genre}': {e}")
-            continue
+        all_results = []
+        for offset in range(0, 150, 50):
+            try:
+                page = await spotify.search_artists(query, limit=50, offset=offset)
+            except Exception as e:
+                logger.warning(f"Spotify genre search failed for '{genre}' offset={offset}: {e}")
+                break
+            all_results.extend(page)
+            if len(page) < 50:
+                break
 
-        for artist_data in results:
+        for artist_data in all_results:
             if discovered >= MAX_CANDIDATES_PER_LABEL:
                 break
 
